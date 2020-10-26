@@ -85,24 +85,6 @@ class ZettlrRendererIPC {
     // Activate typocheck after 2 seconds to speed up the app's start
     setTimeout(() => { this._typoCheck = true }, 2000)
 
-    // What we are doing here is setting up a special communications channel
-    // with the main process to receive config values. This way it is much
-    // easier to access the configuration from throughout the whole renderer
-    // process.
-    global.config = {
-      get: (key) => {
-        if (typeof key !== 'string') {
-          console.error('Cannot request config value - key was not a string.')
-          return undefined // On error return undefined
-        }
-        // We will send a synchronous event to the main process in order to
-        // immediately receive the config value we need. Basically we are pulling
-        // the get()-handler from main using the "remote" feature, but we'll
-        // implement it ourselves.
-        return ipc.sendSync('config', key)
-      }
-    }
-
     // Inject typo spellcheck and suggest functions into the globals
     global.typo = {
       check: (term) => {
@@ -310,9 +292,14 @@ class ZettlrRendererIPC {
         this._app.getToolbar().focusSearch()
         break
 
-      case 'dir-open':
+      case 'workspace-open':
       // User has requested to open another folder. Notify host process.
-        this.send('dir-open')
+        this.send('workspace-open')
+        break
+
+      case 'root-file-open':
+        // User wants to open a new root file
+        this.send('root-file-open')
         break
 
       // The user wants to open a dir externally (= in finder etc)

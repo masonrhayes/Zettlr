@@ -3,11 +3,17 @@
 ## Breaking Changes
 
 - Renamed the **sidebar** to **file manager**. We finally decided on better terminology for distinguishing the right from the left sidebar. This means: The left sidebar, formerly known only as "sidebar," is now the "file manager." The right sidebar, formerly known as "attachment sidebar," is now "the" sidebar. This change was introduced to reduce user confusion and provide a better user experience.
+- The shortcut for opening the developer tools on Windows and Linux is now `Ctrl+Alt+I` (was: `Ctrl+Shift+I`) to resolve a conflict with the shortcut `Ctrl+Shift+I` (insert images).
+- Renamed **Root Directories** to **Workspaces**. The term "root" is rather technical, and for most people, it makes most sense to think of those roots as workspaces, albeit other than being opened at the root level of the application, they have no difference to regular directories.
 
 ## GUI and Functionality
 
 - **New Feature**: Typewriter mode. By pressing `Cmd/Ctrl+Alt+T`, you can activate the typewriter mode, which will keep the current line in the editor always centered so that you have to move your eyes less while editing a text. This also works in combination with the distraction free mode so that you can fully focus on what you're editing right at the moment.
 - **New Feature**: The sidebar (formerly attachment sidebar) is now tabbified. That means you have three distinct tabs to choose from with regard to displaying important information: the non-markdown files in your currently selected directory, the references in the current file, and the table of contents of the current file.
+- **New Feature**: When hovering over links, they now appear in a separate tooltip to click them without holding down Ctrl/Cmd.
+- **New Feature**: The QuickLook windows now share the main editor including its appearance. The same options apply for Quicklook windows as they are set in the global preferences (e.g. if you turned off image previewing, images would also not be displayed in the Quicklooks, etc).
+- **New Feature**: Now you have an additional option in the "Advanced" preferences to choose between a "native" appearance of all Zettlr Windows (that is, a frameless window with inset traffic lights on macOS, and standard window decorations on Windows and Linux) or a custom built-in appearance (that is, for all platforms a frameless window with custom drawn menu and window control buttons, which mimick the Windows 10 design).
+- **New Feature**: The heading tag elements (those `h1` to `h6`-tags replacing the Markdown heading characters) finally serve a purpose: Clicking on them reveals a small menu which lets you quickly choose a different heading level.
 - Added syntax highlighting modes (with keywords):
     - **diff**: `diff`
     - **Dockerfile**: `docker`/`dockerfile`
@@ -40,6 +46,17 @@
 - Fixed a bug that would throw errors and not actually remove the file if said file was a root.
 - Fixed broken shortcuts `Cmd/Ctrl+Shift+E` (focus the editor) and `Cmd/Ctrl+Shift+T` (focus the file list).
 - Markdown links to local files that are absolute are now attempted to be opened internally, without recurring to external programs.
+- The various rendering methods now only update anything that is within the viewport, thereby increasing the performance vastly. This is especially noticable for large documents.
+- Fixed a bug that led to the exporter ignoring custom templates and always reverting to the default.
+- Fixed the date formatter, as the moment.js locales are not found when compiling using `electron-forge`.
+- Fixed a bug that would mess up the tag-tooltip on files under certain circumstances.
+- Fixed a bug that would throw errors instead of exporting, if the export-directory is set to the current working directory and a non-root file is being exported.
+- Fixed a bug which would not let you create duplicates of root files. Now, you can and the duplicate is being placed in the currently selected directory.
+- Fixed a rendering edge condition where if you wanted to retain multiple single-line breaks with backslashes, the backslashes positioned on the line would have had alternating colours.
+- Collocated the time-display and time-sorting settings for files to reduce confusion if users _display_ the modification time but sort using the creation time, or vice versa.
+- Improved the layouting of the display settings tab.
+- The context menu is now a custom one, making the experience more seamless.
+- If you change the display settings for the editor, the editor will now also remove rendered elements that you do not wish to be rendered anymore.
 
 ## Under the Hood
 
@@ -55,7 +72,7 @@
   - chokidar `3.4.2`
   - codemirror `5.57.0`
   - copy-webpack-plugin `6.1.0`
-  - electron `9.3.0`
+  - electron `10.1.4`
   - eslint `7.8.1`
   - eslint-config-standard-with-typescript `19.0.1`
   - eslint-plugin-vue `7.0.0-beta.3`
@@ -97,6 +114,30 @@
 - Documentation fix for `safeAssign`.
 - Fixes in the tests.
 - Completely refurbished the test command. Now, a full-fledged testing directory will be set up to test features within the GUI without endangering your regular configuration in case you use Zettlr regularly.
+- Better handling of the custom paths for both the Pandoc and the XeLaTeX executables in the advanced preferences.
+- Migrated the FSAL to TypeScript so that the different descriptors can be better handled. Also, this showed countless logical errors, which are now mostly fixed.
+    - Furthermore, the responsibilities have been readjusted: The FSAL is now responsible for emitting events whenever the internal state changes. This is not being done by the commands anymore.
+    - The actions are now proper methods on the FSAL class in order to enable better tracking of the function arguments and to help ESLint fix possible signature errors.
+    - Moved every piece of state logic from the commands to the FSAL.
+    - Now, the general way anything regarding the files works is as follows: User --> one of the commands --> an action on the FSAL --> emits which part of the state has changed --> the application main class receives these notifications --> triggers potential updates in the renderer.
+    - Additionally, now the distinction between the meta objects which can be serialized and sent to the renderer and the tree objects within the FSAL is made more clear: Metadata files can have content attached to them (in order to save new content to a file), whereas the full objects, which are never getting sent to the renderer, do not contain a content property anymore.
+    - Also, we managed to fix errors regarding remote change detection.
+- The log provider now also outputs on the console, if the app runs unpacked (`app.isPackaged === false`).
+- Updated all service providers. They are now loaded immediately after application boot (right after the `ready`-event fires on the `app`-object) and not when the Zettlr main class loads.
+- Created a new directory `app` which provides functionality that pertains only to the lifecycle of the application itself, such as boot and shutdown functionalities. Service providers have been migrated to there.
+- Fixed the issue that only the `en-US`-language of the CSL styles was loaded for the citation provider.
+- CSL locales and CSL styles are now bundled with the app as `native_modules`.
+- Began providing first global interfaces which the service providers make use of in order to enable ESLint to detect errors.
+- Provide a test library, which you can load to debug citeproc-related issues and test the provider.
+- Converted the CSS Provider to TypeScript.
+- Converted the Log Provider to TypeScript.
+- Migrated the Quicklook and Print window classes to Typescript.
+- Added a utility function to quickly broadcast arbitrary IPC messages to all open Zettlr windows.
+- Migrated many functionalities that are important for all windows on the renderer side to a dedicated TypeScript module (`register-window`).
+- Divided the menu template into templates for macOS and Windows (+ all other platforms).
+- Simplified the menu building process.
+- Added classes and event listeners to show custom built menus within frameless BrowserWindow instances.
+- Deprecate the `remote`-module.
 
 # 1.7.5
 

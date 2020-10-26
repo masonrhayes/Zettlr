@@ -14,11 +14,14 @@
 
   var headRE = /^(#{1,6}) (.*)/g
 
+  var currentCallback = null
+
   CodeMirror.commands.markdownRenderHTags = function (cm) {
     let match
 
-    // Now render all potential new tasks
-    for (let i = 0; i < cm.lineCount(); i++) {
+    // We'll only render the viewport
+    const viewport = cm.getViewport()
+    for (let i = viewport.from; i < viewport.to; i++) {
       if (cm.getModeAt({ 'line': i, 'ch': 0 }).name !== 'markdown') continue
       // Always reset lastIndex property, because test()-ing on regular
       // expressions advances it.
@@ -61,8 +64,80 @@
         }
       )
 
-      // Clear on click
-      hTagWrapper.onclick = (e) => { textMarker.clear() }
+      // Display a small menu to change the heading level on click
+      hTagWrapper.onclick = (e) => {
+        // Prevent bubbling because otherwise the context menu will be hidden
+        // again immediately due to the event bubbling upwards to the window.
+        e.stopPropagation()
+
+        // If we have a callback saved, there is a menu still displayed. It may
+        // be that the callback is still there but no menu is shown, but then
+        // calling it is a no-op
+        if (currentCallback !== null) {
+          currentCallback()
+        }
+
+        const items = [
+          {
+            id: '1',
+            label: '#',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 1
+          },
+          {
+            id: '2',
+            label: '##',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 2
+          },
+          {
+            id: '3',
+            label: '###',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 3
+          },
+          {
+            id: '4',
+            label: '####',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 4
+          },
+          {
+            id: '5',
+            label: '#####',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 5
+          },
+          {
+            id: '6',
+            label: '######',
+            type: 'checkbox',
+            enabled: cm.isReadOnly() === false,
+            checked: headingLevel === 6
+          }
+        ]
+
+        const point = { x: e.clientX, y: e.clientY }
+        currentCallback = global.menuProvider.show(point, items, (id) => {
+          const numID = parseInt(id, 10)
+
+          // Simply adapt the heading level, and clear the text marker.
+          // On the next pass-through, the plugin will re-render the correct
+          // marker for us.
+          cm.replaceRange('#'.repeat(numID), curFrom, curTo)
+          textMarker.clear()
+          currentCallback = null // No need to save it anymore
+          // Programmatically trigger a cursor movement ...
+          cm.setCursor({ line: curFrom.line, ch: numID + 1 })
+          // ... and re-focus the editor
+          cm.focus()
+        })
+      }
     }
   }
 })

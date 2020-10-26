@@ -21,9 +21,7 @@ require('jquery-ui/ui/widget')
 require('jquery-ui/ui/widgets/mouse')
 require('jquery-ui/ui/widgets/sortable')
 
-const ZettlrCon = require('./zettlr-context.js')
 const ZettlrNotification = require('./zettlr-notification.js')
-const ThemeHandler = require('./../common/theme-handler').default
 
 // Dialogs
 const StatsDialog = require('./dialog/stats.js')
@@ -58,22 +56,10 @@ class ZettlrBody {
     this._renderer = parent
     this._spellcheckLangs = null // This holds all available languages
     this._n = [] // Holds all notifications currently displaying
-    // Holds the current popup. Prevents multiple popups from appearing.
-    this._currentPopup = null
-    // Handles switching between themes
-    this._themeHandler = new ThemeHandler()
 
     // This object caches the values of search and replace value, so they stay
     // persistent on a per-session basis.
     this._findPopup = { 'searchVal': '', 'replaceVal': '' }
-
-    // Event listener for the context menu
-    window.addEventListener('contextmenu', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      let menu = new ZettlrCon(this)
-      menu.popup(e)
-    }, false)
 
     document.addEventListener('dragover', function (event) {
       event.preventDefault()
@@ -130,28 +116,6 @@ class ZettlrBody {
     // Inject a global notify and notifyError function
     global.notify = (msg) => { this.notify(msg) }
     global.notifyError = (msg) => { this.notifyError(msg) }
-
-    // Afterwards, activate the event listeners of the window controls
-    $('.windows-window-controls .minimise').click((e) => {
-      global.ipc.send('win-minimise')
-    })
-    $('.windows-window-controls .resize').click((e) => {
-      global.ipc.send('win-maximise')
-    })
-    $('.windows-window-controls .close').click((e) => {
-      global.ipc.send('win-close')
-    })
-  }
-
-  /**
-   * Is called by the app on a configuration change so that the body can make
-   * necessary adjustments.
-   */
-  configChange () {
-    // On config change, change the theme according to the settings
-    // This is also invoked on initial load
-    let newThemeName = global.config.get('display.theme')
-    this._themeHandler.switchTo(newThemeName)
   }
 
   /**
@@ -182,40 +146,6 @@ class ZettlrBody {
     global.popupProvider.show('textfield', targetElement, data, (form) => {
       if (form !== null) {
         global.ipc.send('file-new', { 'name': form[0].value, 'hash': dir.hash })
-      }
-    })
-  }
-
-  /**
-    * Display a small popup to ask for a new file name
-    * @param  {Object} file A file hash.
-    * @return {void}     Nothing to return.
-    */
-  requestDuplicate (file) {
-    // No file given.
-    if (!file) return
-
-    // Retrieve the file
-    file = this._renderer.findObject(file.hash)
-
-    // Cannot duplicate aliases
-    if (file.hasOwnProperty('isAlias') && file.isAlias) return
-
-    const data = {
-      'val': 'Copy of ' + file.name,
-      'placeholder': trans('dialog.file_new.placeholder')
-    }
-
-    const targetElement = document.querySelector('#file-manager div[data-hash="' + file.hash + '"]')
-
-    // Show the appropriate popup
-    global.popupProvider.show('textfield', targetElement, data, (form) => {
-      if (form !== null) {
-        global.ipc.send('file-duplicate', {
-          'dir': file.parent.hash,
-          'file': file.hash,
-          'name': form[0].value
-        })
       }
     })
   }
@@ -258,7 +188,6 @@ class ZettlrBody {
       if (form !== null) {
         global.ipc.send('dir-new', { 'name': form[0].value, 'hash': dir.hash })
       }
-      this._currentPopup = null // Reset current popup
     })
   }
 
@@ -311,68 +240,6 @@ class ZettlrBody {
     global.popupProvider.show('textfield', elem, data, (form) => {
       if (form !== null) {
         global.ipc.send('file-rename', { 'name': form[0].value, 'hash': file.hash })
-      }
-    })
-  }
-
-  /**
-    * Display a small popup to ask for a new icon for that directory.
-    * @param  {number} directoryHash The directory's hash
-    * @return {void}     Nothing to return.
-    */
-  displayIconSelect (arg) {
-    let dir = this._renderer.findObject(arg.hash)
-    if (!dir) return // No directory found
-
-    let elem = document.querySelector('#file-tree div[data-hash="' + arg.hash + '"]')
-
-    // Display the popup
-    global.popupProvider.show('icon-selector', elem)
-
-    // Listen to clicks
-    $('#icon-selector-popup').on('click', '.icon-block', (event) => {
-      let div = event.currentTarget
-      let icon = div.dataset['shape']
-      global.ipc.send('dir-set-icon', {
-        'hash': dir.hash,
-        'icon': (icon === '__reset') ? null : icon
-      })
-
-      // Close & dereference
-      global.popupProvider.close()
-    })
-  }
-
-  /**
-   * Shows the popup to set or update a target on a file.
-   * @param {number} hash The hash for which the popup should be shown.
-   */
-  setTarget (hash) {
-    let file = this._renderer.findObject(hash)
-    if (file === null) return // No file given
-
-    let targetMode = 'words'
-    let targetCount = 0
-
-    if (file.hasOwnProperty('target') && file.target != null) {
-      // Overwrite the properties with the ones given
-      targetMode = file.target.mode || 'words' // Fallback
-      targetCount = file.target.count || 0
-    }
-
-    const data = {
-      'mode': targetMode,
-      'count': targetCount
-    }
-
-    // Show the appropriate popup
-    global.popupProvider.show('target', document.querySelector(`[data-hash=${hash}]`), data, (form) => {
-      if (form !== null) {
-        global.ipc.send('set-target', {
-          'hash': parseInt(hash),
-          'mode': form[1].value,
-          'count': parseInt(form[0].value)
-        })
       }
     })
   }
@@ -437,17 +304,6 @@ class ZettlrBody {
   notifyError (message) {
     let d = new ErrorDialog()
     d.init(message).open()
-  }
-
-  /**
-   * Set the theme depending of a truthy or falsy value of val.
-   * @param  {Boolean} val Either true or false.
-   * @return {ZettlrBody}     Chainability.
-   */
-  darkTheme (val) {
-    if (val && !$('body').hasClass('dark')) $('body').addClass('dark')
-    else if (!val) $('body').removeClass('dark')
-    return this
   }
 
   /**

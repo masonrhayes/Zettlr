@@ -6,14 +6,15 @@
  * Maintainer:      Hendrik Erz
  * License:         GNU GPL v3
  *
- * Description:     This file is the procedural file for the main process. It is
- *                  the main entry point for the application. What it does:
- *                  Listen to app-Events and initialize the Zettlr object.
+ * Description:     This is the application's entry file. This gets executed as
+ *                  soon as the app starts. Its task is only to hook onto the
+ *                  app events and boot the application.
  *
  * END HEADER
  */
 
-import { app, protocol } from 'electron'
+import { app } from 'electron'
+import { bootApplication, shutdownApplication } from './app/lifecycle'
 
 // Include the global Zettlr class
 import Zettlr from './main/zettlr'
@@ -21,57 +22,62 @@ import Zettlr from './main/zettlr'
 // Helper function to extract files to open from process.argv
 import extractFilesFromArgv from './common/util/extract-files-from-argv'
 
-// Developer tools
-import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
+// Immediately after launch, check if there is already another instance of
+// Zettlr running, and, if so, exit immediately. The arguments (including files)
+// from this instance will already be passed to the first instance.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+}
 
-global.preBootLog = [{
-  'level': 2, // Info
-  // eslint-disable-next-line no-irregular-whitespace
-  'message': `こんにちは！　Booting Zettlr at ${(new Date()).toString()}.`
-}]
+// If we reach this point, we are now booting the first instance of Zettlr.
+
+// *****************************************************************************
+
+// Set up the pre-boot log
+global.preBootLog = []
+
+// NOTE: This has to be set even before the application has been booted.
+global.filesToOpen = []
 
 /**
  * This will be overwritten by the log provider, once it has booted
  */
 global.log = {
-  'verbose': (message: string) => {
+  verbose: (message: string) => {
     global.preBootLog.push({ 'level': 1, 'message': message })
   },
-  'info': (message: string) => {
+  info: (message: string) => {
     global.preBootLog.push({ 'level': 2, 'message': message })
   },
-  'warning': (message: string) => {
+  warning: (message: string) => {
     global.preBootLog.push({ 'level': 3, 'message': message })
   },
-  'error': (message: string) => {
+  error: (message: string) => {
     global.preBootLog.push({ 'level': 4, 'message': message })
-  }
+  },
+  showLogViewer: () => { /* Dummy method to fulfill interface contract */ }
 }
 
 /**
  * The main Zettlr object. As long as this exists in memory, the app will run.
- * @type {Zettlr}
+ * @type {Zettlr|null}
  */
-let zettlr: Zettlr
+let zettlr: Zettlr|null = null
 
 /**
- * Global array containing files collected from argv before process start
- * @type {Array}
+ * Hook into the ready event and initialize the main object creating everything
+ * else. It is necessary to wait for the ready event, because prior, some APIs
+ * may not work correctly.
  */
-global.filesToOpen = extractFilesFromArgv() // Will automatically filter these out
-
-/**
- * This variable is true, if this process is the only one, or false if there is
- * already one running on this system.
- * @type {Boolean}
- */
-let isFirstInstance = app.requestSingleInstanceLock()
-
-/**
- * Exit immediately if this is a second instance of Zettlr.
- * @param  {Boolean} isFirstInstance Whether or not this is a second instance.
- */
-if (!isFirstInstance) app.exit(0)
+app.whenReady().then(() => {
+  // Immediately boot the application. This function performs some initial
+  // checks to make sure the environment is as expected for Zettlr, and boots
+  // up the providers.
+  bootApplication().then(() => {
+    // Now instantiate the main class which will care about everything else
+    zettlr = new Zettlr()
+  }).catch(err => console.error(err))
+}).catch(e => console.error(e))
 
 /**
  * This event will be called if another instance of Zettlr has been opened with
@@ -83,6 +89,11 @@ if (!isFirstInstance) app.exit(0)
  * @param {String} cwd The current working directory
  */
 app.on('second-instance', (event, argv, cwd) => {
+  if (zettlr === null) {
+    console.error('A second instance called this instance but a Zettlr object has not yet been instantiated. This may indicate a logical error.')
+    return
+  }
+
   let files = extractFilesFromArgv(argv) // Override process.argv with the correct one
 
   if (files.length === 0) return // Nothing to do
@@ -90,16 +101,18 @@ app.on('second-instance', (event, argv, cwd) => {
   global.log.info(`Opening ${files.length} files from a second instance.`, files)
 
   let win = zettlr.getWindow().getWindow()
-  if (!win) {
+  if (win === null) {
     zettlr.getWindow().open()
-  } else {
+  } else if (win?.isMinimized()) {
     // Restore the window in case it's minimised
-    if (win.isMinimized()) win.restore()
+    win.restore()
+    win.focus()
+  } else {
     win.focus()
   }
 
   // In case the user wants to open a file/folder with this running instance
-  zettlr.handleAddRoots(files)
+  zettlr.handleAddRoots(files).catch(err => { console.error(err) })
 })
 
 /**
@@ -108,8 +121,8 @@ app.on('second-instance', (event, argv, cwd) => {
 app.on('open-file', (e, p) => {
   e.preventDefault() // Need to explicitly set this b/c we're handling this
   // The user wants to open a file -> simply handle it.
-  if (zettlr) {
-    zettlr.handleAddRoots([p])
+  if (zettlr !== null) {
+    zettlr.handleAddRoots([p]).catch((err) => { global.log.error(err) })
   } else {
     // The Zettlr object has yet to be created -> use the global.
     global.filesToOpen.push(p)
@@ -117,62 +130,19 @@ app.on('open-file', (e, p) => {
 })
 
 /**
- * Hook into the ready event and initialize the main object creating everything
- * else. It is necessary to wait for the ready event, because prior, some APIs
- * may not work correctly.
- */
-app.whenReady().then(() => {
-  global.log.info('Electron reports ready state. Instantiating main process...')
-
-  try {
-    // Load Vue developer extension
-    installExtension(VUEJS_DEVTOOLS)
-      .then((name: string) => global.log.info(`Added DevTools extension:  ${name}`))
-      .catch((err: any) => console.log('An error occurred: ', err))
-  } catch (e) {
-    global.log.verbose('Electron DevTools Installer not found - proceeding without loading developer tools.')
-  }
-
-  // Make it possible to safely load external files
-  // In order to load files, the 'safe-file' protocol has to be used instead of 'file'
-  // https://stackoverflow.com/a/61623585/873661
-  const protocolName = 'safe-file'
-  protocol.registerFileProtocol(protocolName, (request, callback) => {
-    const url = request.url.replace(`${protocolName}://`, '')
-    try {
-      // eslint-disable-next-line standard/no-callback-literal
-      return callback({
-        path: decodeURIComponent(url),
-        // Prevent that local files are cached
-        headers: { 'Cache-control': 'no-store', 'pragma': 'no-cache' }
-      })
-    } catch (error) {
-      global.log.error('Error loading external file', error)
-    }
-  })
-
-  zettlr = new Zettlr()
-})
-
-/**
  * Quit as soon as all windows are closed and we are not on macOS.
  */
-app.on('window-all-closed', async function () {
+app.on('window-all-closed', function () {
   // On OS X it is common for applications and their menu bar
   // to stay active until the user quits explicitly with Cmd + Q
-  if (process.platform !== 'darwin') {
-    try {
-      // Shutdown the app before quitting
-      await zettlr.shutdown()
-    } catch (e) {
-      // Using a try/catch we prevent potential zombie processes. The console
-      // is here to inform the devs in case there's weird behaviour, so we can
-      // double-check if there's an error, e.g., in the provider shutdowns.
-      // This makes sure the app quits correctly on user systems, whereas we
-      // can have a look at the console for that.
-      console.error(e)
-    }
-    app.quit()
+  if (process.platform !== 'darwin' && zettlr !== null) {
+    // Shutdown the app before quitting
+    Promise.all([
+      shutdownApplication(),
+      zettlr.shutdown()
+    ])
+      .catch(err => console.error(err))
+      .finally(() => app.quit())
   }
 })
 
@@ -180,15 +150,23 @@ app.on('window-all-closed', async function () {
  * Hook into the will-quit event to make sure we are able to shut down our app
  * properly.
  */
-app.on('will-quit', async function (event) {
-  if (zettlr) await zettlr.shutdown()
+app.on('will-quit', function (event) {
+  if (zettlr !== null) {
+    Promise.all([
+      shutdownApplication(),
+      zettlr.shutdown()
+    ])
+      .catch(err => console.error(err))
+  }
 })
 
 /**
  * On macOS, open a new window as soon as the user re-activates the app.
  */
 app.on('activate', function () {
-  zettlr.openWindow()
+  if (zettlr !== null) {
+    zettlr.openWindow()
+  }
 })
 
 /**

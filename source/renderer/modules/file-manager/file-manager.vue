@@ -53,7 +53,7 @@
             v-show="getDirectories.length > 0"
             id="directories-dirs-header"
           >
-            <clr-icon shape="tree-view"></clr-icon>{{ dirSectionHeading }}
+            <clr-icon shape="tree-view"></clr-icon>{{ workspaceSectionHeading }}
           </div>
           <tree-item
             v-for="item in getDirectories"
@@ -262,7 +262,7 @@ module.exports = {
     noRootsMessage: function () { return trans('gui.empty_directories') },
     noResultsMessage: function () { return trans('gui.no_search_results') },
     fileSectionHeading: function () { return trans('gui.files') },
-    dirSectionHeading: function () { return trans('gui.dirs') },
+    workspaceSectionHeading: function () { return trans('gui.workspaces') },
     emptyFileListMessage: function () { return trans('gui.no_dir_selected') },
     emptyDirectoryMessage: function () { return trans('gui.empty_dir') },
     emptySearchResults: function () { return this.$store.state.searchNoResults }
@@ -472,17 +472,19 @@ module.exports = {
       // the data-tippy-content-property.
       let elements = document.querySelectorAll('#file-manager [data-tippy-content]')
       for (let elem of elements) {
-        if (elem._tippy) elem._tippy.setContent(elem.dataset.tippyContent)
+        // Either there's already an instance on the element,
+        // then only update its contents ...
+        if (elem.hasOwnProperty('_tippy')) {
+          elem._tippy.setContent(elem.dataset.tippyContent)
+        } else {
+          // ... or there is none, so let's add a tippy instance.
+          tippy(elem, {
+            delay: 100,
+            arrow: true,
+            duration: 100
+          })
+        }
       }
-
-      // Create instances for all elements without already existing
-      // tippy-instances.
-      tippy('#file-manager [data-tippy-content]', {
-        delay: 100,
-        arrow: true,
-        duration: 100,
-        theme: 'light' // TODO: can be used to change to light in light mode (or better: vice versa)
-      })
     },
     /**
      * Navigates the filelist to the next/prev file.

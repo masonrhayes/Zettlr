@@ -25,13 +25,12 @@ const getCodeMirrorDefaultOptions = require('./get-cm-options')
 const safeAssign = require('../../../common/util/safe-assign')
 const countWords = require('../../../common/util/count-words')
 const md2html = require('../../../common/util/md-to-html')
-const moveSection = require('../../../common/util/move-section')
 const generateKeymap = require('./generate-keymap.js')
 
 /**
  * APIs
  */
-const { clipboard } = require('electron')
+const { clipboard, ipcRenderer } = require('electron')
 const EventEmitter = require('events')
 
 /**
@@ -55,6 +54,10 @@ const muteLinesHook = require('./hooks/mute-lines')
 const renderElementsHook = require('./hooks/render-elements')
 const typewriterHook = require('./hooks/typewriter')
 const initiateTablesHook = require('./hooks/initiate-tables')
+const { autocompleteHook, setAutocompleteDatabase } = require('./hooks/autocomplete')
+const linkTooltipsHook = require('./hooks/link-tooltips')
+
+const displayContextMenu = require('./display-context-menu')
 
 module.exports = class MarkdownEditor extends EventEmitter {
   /**
@@ -93,6 +96,13 @@ module.exports = class MarkdownEditor extends EventEmitter {
      * @var {Number}
      */
     this._fontsize = 100
+
+    /**
+     * Can hold a close-callback from an opened context menu
+     *
+     * @var {Function}
+     */
+    this._contextCloseCallback = null
 
     /**
      * The CodeMirror options
@@ -134,6 +144,8 @@ module.exports = class MarkdownEditor extends EventEmitter {
     renderElementsHook(this._instance)
     typewriterHook(this._instance)
     initiateTablesHook(this._instance)
+    autocompleteHook(this._instance)
+    linkTooltipsHook(this._instance)
 
     // As a last step, listen to the change and click events, as this
     // is what will be needed by the holding instance to determine
@@ -166,6 +178,43 @@ module.exports = class MarkdownEditor extends EventEmitter {
         this.emit('zettelkasten-link', tokenInfo.string)
       } else if (tokenList.includes('zkn-tag')) {
         this.emit('zettelkasten-tag', tokenInfo.string)
+      }
+    })
+
+    // Display a context menu if appropriate
+    this._instance.getWrapperElement().addEventListener('contextmenu', (event) => {
+      const shouldSelectWordUnderCursor = displayContextMenu(event, this._instance.isReadOnly(), (command) => {
+        switch (command) {
+          case 'cut':
+          case 'copy':
+          case 'paste':
+            // NOTE: We do not send selectAll to main albeit there is such a command
+            // because in the specific case of CodeMirror this results in unwanted
+            // behaviour.
+            // Needs to be issued from main on the holding webContents
+            ipcRenderer.send('window-controls', command)
+            break
+          case 'pasteAsPlain':
+            this.pasteAsPlainText()
+            break
+          case 'copyAsHTML':
+            this.copyAsHTML()
+            break
+          default:
+            this._instance.execCommand(command)
+            break
+        }
+        // In any case, re-focus the editor, either for cut/copy/paste to work
+        // or to resume working afterwards
+        this._instance.focus()
+      }, (wordToReplace) => {
+        // Simply replace the selection with the given word
+        this._instance.replaceSelection(wordToReplace)
+      })
+
+      // If applicable, select the word under cursor
+      if (shouldSelectWordUnderCursor) {
+        this._instance.execCommand('selectWordUnderCursor')
       }
     })
   } // END CONSTRUCTOR
@@ -201,7 +250,7 @@ module.exports = class MarkdownEditor extends EventEmitter {
    * @param  {Number} line The line to pull into view
    */
   jtl (line) {
-    this._instance.doc.setCursor({ 'line': line, 'ch': 0 })
+    this._instance.setCursor({ 'line': line, 'ch': 0 })
     this._instance.refresh()
   }
 
@@ -224,18 +273,6 @@ module.exports = class MarkdownEditor extends EventEmitter {
   }
 
   /**
-   * Moves a section demarcated by ATX headings to the given line
-   *
-   * @param   {Number}  fromLine  The starting line
-   * @param   {Number}  toLine    The target line after which to insert
-   */
-  moveSection (fromLine, toLine) {
-    let value = this._instance.getValue()
-    let newValue = moveSection(value, fromLine, toLine)
-    this._instance.setValue(newValue)
-  }
-
-  /**
    * Sets the current options with a new options object, which will be merged
    *
    * @param   {Object}  newOptions  The new options
@@ -243,6 +280,18 @@ module.exports = class MarkdownEditor extends EventEmitter {
   setOptions (newOptions) {
     // First, merge the new options into the CodeMirror options
     this._cmOptions = safeAssign(newOptions, this._cmOptions)
+
+    if (newOptions.hasOwnProperty('zettlr') && newOptions.zettlr.hasOwnProperty('render')) {
+      // If this property is set this mostly means that the rendering preferences
+      // have changed. We need to remove all text markers so that only those
+      // that are wanted are re-rendered. This will always execute on preferences
+      // setting until we have established some cool "what has actually changed?"
+      // indication in the settings provider, but this should not be too annoying.
+      const markers = this._instance.doc.getAllMarks()
+      for (let marker of markers) {
+        marker.clear()
+      }
+    }
 
     // Second, set all options on the CodeMirror instance. This will internally
     // fire all necessary events, apart from those we need to fire manually.
@@ -311,6 +360,16 @@ module.exports = class MarkdownEditor extends EventEmitter {
     this._instance.focus()
   }
 
+  /**
+   * Sets an autocomplete database of given type to a new value
+   *
+   * @param   {String}  type      The type of the database
+   * @param   {Object}  database  The show-hint-addon compatible database
+   */
+  setCompletionDatabase (type, database) {
+    setAutocompleteDatabase(type, database)
+  }
+
   /* * * * * * * * * * * *
    * GETTERS AND SETTERS *
    * * * * * * * * * * * */
@@ -322,16 +381,37 @@ module.exports = class MarkdownEditor extends EventEmitter {
    */
   get tableOfContents () {
     let toc = []
-    for (let i = 0; i < this._instance.doc.lineCount(); i++) {
-      // Don't include comments from code examples in the TOC
-      if (this._instance.getModeAt({ 'line': i, 'ch': 0 }).name !== 'markdown') continue
-      let line = this._instance.doc.getLine(i)
-      if (/^#{1,6} /.test(line)) {
+
+    let lines = this.value.split('\n')
+
+    let inCodeBlock = false
+    let inYamlFrontMatter = lines[0] === '---'
+    for (let i = 0; i < lines.length; i++) {
+      if (inYamlFrontMatter && [ '...', '---' ].includes(lines[i])) {
+        inYamlFrontMatter = false
+        continue
+      }
+
+      if (inYamlFrontMatter && ![ '...', '---' ].includes(lines[i])) {
+        continue
+      }
+
+      if (/^\s*`{3,}/.test(lines[i])) {
+        inCodeBlock = !inCodeBlock
+        continue
+      }
+
+      if (inCodeBlock && !/^\s*`{3,}$/.test(lines[i])) {
+        continue
+      }
+
+      // Now that invalid sections are out of the way, test for a heading
+      if (/^#{1,6} /.test(lines[i])) {
         toc.push({
           'line': i,
           // From the line remove both the heading indicators and optional ending classes
-          'text': line.replace(/^#{1,6} /, '').replace(/\{.*\}$/, ''),
-          'level': (line.match(/^(#+)/) || [ [], [] ])[1].length
+          'text': lines[i].replace(/^#{1,6} /, '').replace(/\{.*\}$/, ''),
+          'level': (lines[i].match(/^(#+)/) || [ [], [] ])[1].length
         })
       }
     }

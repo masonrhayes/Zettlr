@@ -36,10 +36,65 @@ class ZettlrIPC {
 
     // Listen for synchronous messages from the renderer process to access
     // config options.
-    ipc.on('config', (event, key) => {
+    ipc.on('config-get', (event, key) => {
       // We have received a config event -> simply return back the respective
       // key.
       event.returnValue = global.config.get(key)
+    })
+
+    // We shall set a config value
+    ipc.on('config-set', (event, key, value) => {
+      event.returnValue = global.config.set(key, value)
+    })
+
+    // Listen to window commands
+    ipc.on('window-controls', (event, command) => {
+      const callingWindow = BrowserWindow.fromWebContents(event.sender)
+
+      if (callingWindow === null) return
+
+      console.log('Command received ' + command)
+
+      switch (command) {
+        // Window controls actions can be send either as callback IPC calls or as
+        // normals (which is why they are present both in runCall and handleEvent)
+        case 'win-maximise':
+          if (callingWindow.isMaximized()) {
+            callingWindow.unmaximize()
+          } else {
+            callingWindow.maximize()
+          }
+          event.sender.send('window-controls', {
+            command: 'win-size-changed',
+            payload: callingWindow.isMaximized()
+          })
+          break
+        case 'win-minimise':
+          callingWindow.minimize()
+          break
+        case 'win-close':
+          callingWindow.close()
+          break
+        case 'get-maximised-status':
+          event.sender.send('window-controls', {
+            command: 'get-maximised-status',
+            payload: callingWindow.isMaximized()
+          })
+          break
+        // Convenience APIs for the renderers to execute these commands
+        case 'cut':
+          event.sender.cut()
+          break
+        case 'copy':
+          event.sender.copy()
+          break
+        case 'paste':
+          event.sender.paste()
+          break
+        case 'selectAll':
+          event.sender.selectAll()
+          break
+      }
     })
 
     // Beginn listening to messages
@@ -80,12 +135,6 @@ class ZettlrIPC {
         global.application.getFile(QLFile).then(file => {
           event.sender.send('file', file)
         })
-        return
-      }
-
-      if (arg.command === 'get-custom-css-path') {
-        // The main window's calls will be intercepted by having a cypher previously.
-        event.sender.send('custom-css', global.css.getPath())
         return
       }
 
@@ -135,7 +184,7 @@ class ZettlrIPC {
   /**
     * This sends a message to the current window's renderer process.
     * @param  {String} command      The command to be sent
-    * @param  {Object} [content={}] Can be either simply a string or a whole object
+    * @param  {any} [content={}] Can be either simply a string or a whole object
     * @return {ZettlrIPC}              This for chainability.
     */
   send (command, content = {}) {
@@ -172,6 +221,7 @@ class ZettlrIPC {
       return res // In case the command has run there's no need to handle it.
     } catch (e) {
       // Simple fall through
+      if (e.message.indexOf('No command registered with the application') < 0) console.error(e)
     }
 
     switch (cmd) {
@@ -240,7 +290,7 @@ class ZettlrIPC {
 
       // Sent by the renderer to indicate the active file has changed
       case 'set-active-file':
-        this._app.getFileSystem().setActiveFile(cnt.hash)
+        this._app.getFileSystem().activeFile = cnt.hash
         break
 
       // The renderer requested that the editor
@@ -254,9 +304,14 @@ class ZettlrIPC {
         global.targets.set(cnt)
         break
 
-      case 'dir-open':
+      case 'workspace-open':
         // Client requested a totally different folder.
-        this._app.open()
+        this._app.openWorkspace()
+        break
+
+      case 'root-file-open':
+        // Client requested a new file.
+        this._app.openRootFile()
         break
 
       // Change theme in config
@@ -348,27 +403,6 @@ class ZettlrIPC {
     // We received a new event and need to handle it.
 
     switch (cmd) {
-      // Window controls actions can be send either as callback IPC calls or as
-      // normals (which is why they are present both in runCall and handleEvent)
-      case 'win-maximise':
-        if (BrowserWindow.getFocusedWindow()) {
-          // Implements maximise-toggling for windows
-          if (BrowserWindow.getFocusedWindow().isMaximized()) {
-            BrowserWindow.getFocusedWindow().unmaximize()
-          } else {
-            BrowserWindow.getFocusedWindow().maximize()
-          }
-        }
-        break
-
-      case 'win-minimise':
-        if (BrowserWindow.getFocusedWindow()) BrowserWindow.getFocusedWindow().minimize()
-        break
-
-      case 'win-close':
-        if (BrowserWindow.getFocusedWindow()) BrowserWindow.getFocusedWindow().close()
-        break
-
       // We should show the askFile dialog to the user and return its result.
       case 'request-files':
         // The client only can choose what and how much it wants to get
@@ -391,12 +425,9 @@ class ZettlrIPC {
       case 'get-custom-css':
         return global.css.get()
 
-      // Returns the custom CSS's file name
-      case 'get-custom-css-path':
-        return global.css.getPath()
-
       // Updates the file contents
       case 'set-custom-css':
+        console.log('setting custom css', arg)
         return global.css.set(arg)
 
       default:
