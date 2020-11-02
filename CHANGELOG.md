@@ -14,6 +14,8 @@
 - **New Feature**: The QuickLook windows now share the main editor including its appearance. The same options apply for Quicklook windows as they are set in the global preferences (e.g. if you turned off image previewing, images would also not be displayed in the Quicklooks, etc).
 - **New Feature**: Now you have an additional option in the "Advanced" preferences to choose between a "native" appearance of all Zettlr Windows (that is, a frameless window with inset traffic lights on macOS, and standard window decorations on Windows and Linux) or a custom built-in appearance (that is, for all platforms a frameless window with custom drawn menu and window control buttons, which mimick the Windows 10 design).
 - **New Feature**: The heading tag elements (those `h1` to `h6`-tags replacing the Markdown heading characters) finally serve a purpose: Clicking on them reveals a small menu which lets you quickly choose a different heading level.
+- **New Feature**: Improvement in the citation rendering capabilities: Both when copying Markdown as HTML, and when viewing footnote tooltips, any citation will be correctly rendered by the citeproc provider.
+- **New Feature**: The TableEditor now pre-renders table cells so that it looks more like it will when you export it!
 - Added syntax highlighting modes (with keywords):
     - **diff**: `diff`
     - **Dockerfile**: `docker`/`dockerfile`
@@ -57,38 +59,56 @@
 - Improved the layouting of the display settings tab.
 - The context menu is now a custom one, making the experience more seamless.
 - If you change the display settings for the editor, the editor will now also remove rendered elements that you do not wish to be rendered anymore.
+- Footnote tooltips are now interactive, which means you can select text from them, and also click on any link to visit it without having to scroll to the bottom and do the same action there.
+- You can now forcefully open a file non-transient by either middle-clicking it, or holding down Ctrl/Cmd.
+- If you use YAML frontmatters demarcated by only dashes (`---`), for instance for compatibility with Jeckyll, these will not render as tables anymore.
+- Switched to reveal.js 4 and fixed an occasional error on export.
+- The tutorial is now also available in German.
+- The application menu now displays many more shortcuts which were already available albeit not visible.
 
 ## Under the Hood
 
 - Switched to Electron forge (thanks to @tobiasdiez for implementing).
 - Bumped dependencies:
-  - @clr/icons `4.0.1`
+  - @clr/icons `4.0.4`
   - @electron-forge/cli `6.0.0-beta.53`
   - @electron-forge/plugin-webpack `6.0.0-beta.53`
   - @teamsupercell/typings-for-css-modules-loader `2.3.0`
-  - @typescript-eslint/eslint-plugin `4.1.0`
-  - @typescript-eslint/parser `4.1.0`
+  - @typescript-eslint/eslint-plugin `4.5.0`
+  - @typescript-eslint/parser `4.5.0`
   - archiver `5.0.2`
-  - chokidar `3.4.2`
-  - codemirror `5.57.0`
+  - chokidar `3.4.3`
+  - citeproc `2.4.45`
+  - codemirror `5.58.2`
+  - chart.js `2.9.4`
   - copy-webpack-plugin `6.1.0`
-  - electron `10.1.4`
+  - electron `10.1.5`
   - eslint `7.8.1`
   - eslint-config-standard-with-typescript `19.0.1`
+  - eslint-plugin-import `2.22.1`
+  - eslint-plugin-standard `4.0.2`
   - eslint-plugin-vue `7.0.0-beta.3`
-  - file-loader `6.1.0`
+  - file-loader `6.1.1`
   - fork-ts-checker-webpack-plugin `5.1.0`
   - fsevents `2.1.3`
-  - got `11.6.2`
+  - got `11.8.0`
   - md5 `2.3.0`
-  - mocha `8.1.3`
-  - node-loader `1.0.1`
-  - on-change `2.1.2`
-  - ts-loader `8.0.3`
-  - typescript `4.0.2`
-  - uglify-js `3.10.4`
+  - mermaid `8.8.2`
+  - mocha `8.2.0`
+  - moment `2.29.1`
+  - node-loader `1.0.2`
+  - nspell `2.1.4`
+  - raw-loader `4.0.2`
+  - reveal.js `4.1.0`
+  - tippy.js `6.2.7`
+  - ts-loader `8.0.7`
+  - typescript `4.0.3`
+  - uuid `8.3.1`
   - vue `2.6.12`
   - vue-template-compiler `2.6.12`
+- Removed dependencies:
+  - uglify-js
+  - on-change
 - Added a new Handlebars templating helper function, `i18n_value` that allows you to translate something passing a value to the translation helper (e.g. `{{i18n_value 'trans.identifier' someValue}}`).
 - Refactored the main build Workflow file. Now it doesn't run on a matrix, but due to the many dissimilar steps involved, there are three distinct jobs. Other than that, we switched to the GitHub tag name instead of utilizing a node script to retrieve the `package.json` version, switched to `yarn` everywhere and cleaned up the code.
 - Removed the now unused scripts `get-pkg-version.js` and `afterSign.js`.
@@ -138,6 +158,8 @@
 - Simplified the menu building process.
 - Added classes and event listeners to show custom built menus within frameless BrowserWindow instances.
 - Deprecate the `remote`-module.
+- The md2html-function can now make anchors renderer-safe, so that they don't open within the main window anymore.
+- The menu handler is now a service provider.
 
 # 1.7.5
 

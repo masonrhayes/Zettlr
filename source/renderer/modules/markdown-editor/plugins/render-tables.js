@@ -38,14 +38,18 @@ const Table = require('../../table-editor');
       // tables have syntax highlighting -- CodeMirror modes cannot do that).
       let firstLine // First line of a given table
       let lastLine // Last line of a given table
-      let potentialTableType // Stores the potential type, can be "pipe", "simple"
+      let potentialTableType // Can be "grid", "pipe", "simple"
       let line = cm.getLine(i)
       let match = tableHeadingRE.exec(line)
       if (match == null) continue // No table heading
 
       if (match[1]) {
         // Group 1 triggered, so we might have a simple table.
-        if (cm.getLine(i + 1).trim() === '') continue // It's a Setext heading
+        const nextLine = cm.getLine(i + 1)
+        if (nextLine === undefined || nextLine.trim() === '') {
+          // Either end of document or a setext heading
+          continue
+        }
         if (i === 0 || cm.getLine(i - 1).trim() === '') {
           // We have a headless table, so let's search the end.
           firstLine = i // First line in this case is i
@@ -122,6 +126,19 @@ const Table = require('../../table-editor');
 
       // We can only have one marker at any given position at any given time
       if (cm.findMarks(curFrom, curTo).length > 0) continue
+
+      // A last sanity check: You could write YAML frontmatters by using only
+      // dashes at the beginning and ending, which demarcates an edge condition.
+      const beginningIsMd = cm.getModeAt(curFrom).name === 'markdown'
+      // The mode will be Markdown again at the last character of the ending
+      // separator from a YAML frontmatter, so it would render those as tables
+      // as well. We have to check the FIRST character, as that would -- in the
+      // case of a YAML frontmatter -- still be within YAML mode, not Markdown.
+      const endingIsMd = cm.getModeAt({ line: curTo.line, ch: 0 }).name === 'markdown'
+
+      if (!beginningIsMd || !endingIsMd) {
+        continue
+      }
 
       // First grab the full table
       let markdownTable = ''

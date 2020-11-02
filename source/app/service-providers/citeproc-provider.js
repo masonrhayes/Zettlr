@@ -129,6 +129,8 @@ module.exports = class CiteprocProvider {
             'renderedCitation': this.getCitation(payload.citation)
           }
         })
+      } else if (command === 'get-citation-sync') {
+        event.returnValue = this.getCitation(payload.citation)
       }
     })
 
@@ -185,6 +187,13 @@ module.exports = class CiteprocProvider {
    */
   _read () {
     this._mainLibrary = global.config.get('export.cslLibrary')
+    if (this._mainLibrary.trim() === '') {
+      // There is no library to load.
+      this._status = NO_DB
+      global.log.info('[Citeproc Provider] There is no CSL library selected in the preferences. Nothing to do.')
+      return
+    }
+
     try {
       fs.readFile(this._mainLibrary, 'utf8', (err, data) => {
         if (err) {
