@@ -31,7 +31,7 @@ module.exports = function () {
     // Don't focus on instantiation
     autofocus: false,
     // Necessary to (de)activate the instance programmatically later
-    readOnly: 'nocursor',
+    readOnly: true,
     // Use the fold gutter
     foldGutter: true,
     // Keep the cursor 60px below/above the editor edges
@@ -43,7 +43,7 @@ module.exports = function () {
     // Default fold options
     foldOptions: {
       'widget': '\u00A0\u2026\u00A0', // nbsp ellipse nbsp
-      'scanUp': true // Search upwards if current line cannot be folded
+      'scanUp': false // Do not search upwards if current line cannot be folded
     },
     // Default direction left-to-right
     direction: 'ltr',

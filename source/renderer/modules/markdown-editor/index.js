@@ -192,7 +192,7 @@ module.exports = class MarkdownEditor extends EventEmitter {
             // because in the specific case of CodeMirror this results in unwanted
             // behaviour.
             // Needs to be issued from main on the holding webContents
-            ipcRenderer.send('window-controls', command)
+            ipcRenderer.send('window-controls', { command: command })
             break
           case 'pasteAsPlain':
             this.pasteAsPlainText()
@@ -306,9 +306,6 @@ module.exports = class MarkdownEditor extends EventEmitter {
 
     // Clear the line indentation cache for the corresponding hook
     clearLineIndentationCache()
-
-    // After everything is done, signal necessary events
-    CodeMirror.signal(this._instance, 'cursorActivity', this._instance)
   }
 
   /**
@@ -548,8 +545,7 @@ module.exports = class MarkdownEditor extends EventEmitter {
    * @param   {Boolean}  shouldBeReadonly  Whether the editor contents should be readonly
    */
   set readOnly (shouldBeReadonly) {
-    // We're setting the nocursor property to hide the cursor altogether
-    this.setOptions({ readOnly: (shouldBeReadonly) ? 'nocursor' : false })
+    this.setOptions({ readOnly: shouldBeReadonly })
 
     // Set a special class to indicate not that it's an empty document,
     // but rather that none is open atm

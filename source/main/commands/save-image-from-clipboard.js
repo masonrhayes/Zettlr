@@ -35,11 +35,11 @@ class SaveImage extends ZettlrCommand {
   async run (evt, target) {
     // First check the name for sanity
     let targetFile = sanitize(target.name, '-')
-    let activeFile = this._app.getFileSystem().findFile(this._app.getFileSystem().getActiveFile())
+    let activeFile = this._app.getFileSystem().findFile(this._app.getFileSystem().activeFile)
 
     // A file must be opened and active, and the name valid
-    if (targetFile === '') return global.ipc.notify(trans('system.error.no_allowed_chars'))
-    if (!activeFile) return global.ipc.notify(trans('system.error.fnf_message'))
+    if (targetFile === '') return global.notify.normal(trans('system.error.no_allowed_chars'))
+    if (!activeFile) return global.notify.normal(trans('system.error.fnf_message'))
 
     // Now check the extension of the name (some users may
     // prefer to choose to provide it already)
@@ -55,8 +55,8 @@ class SaveImage extends ZettlrCommand {
     // Did the user want to choose the directory for this one? In this case,
     // that choice overrides the resolved path from earlier.
     if (target.mode === 'save-other') {
-      let dirs = await this._app.getWindow().askDir()
-      targetPath = dirs.filePaths[0] // We only take one directory
+      let dirs = await this._app.askDir()
+      targetPath = dirs[0] // We only take one directory
     }
 
     // Failsafe. Shouldn't be necessary, but you never know. (In that case log
@@ -74,7 +74,7 @@ class SaveImage extends ZettlrCommand {
     }
 
     // If something went wrong or the user did not provide a directory, abort
-    if (!isDir(targetPath)) return global.ipc.notify(trans('system.error.dnf_message'))
+    if (!isDir(targetPath)) return global.notify.normal(trans('system.error.dnf_message'))
 
     // Build the correct path
     let imagePath = path.join(targetPath, targetFile)
@@ -83,7 +83,7 @@ class SaveImage extends ZettlrCommand {
     let image = clipboard.readImage()
 
     // Somebody may have remotely overwritten the clipboard in the meantime
-    if (image.isEmpty()) return global.ipc.notify(trans('system.error.could_not_save_image'))
+    if (image.isEmpty()) return global.notify.normal(trans('system.error.could_not_save_image'))
 
     let size = image.getSize()
     let resizeWidth = parseInt(target.width)
@@ -105,7 +105,7 @@ class SaveImage extends ZettlrCommand {
     global.log.info(`Saving image ${targetFile} to ${imagePath} ...`)
 
     fs.writeFile(imagePath, image.toPNG(), (err) => {
-      if (err) return global.ipc.notify(trans('system.error.could_not_save_image'))
+      if (err) return global.notify.normal(trans('system.error.could_not_save_image'))
       // Insert a relative path instead of an absolute one
       let pathToInsert = path.relative(path.dirname(activeFile.path), imagePath)
 

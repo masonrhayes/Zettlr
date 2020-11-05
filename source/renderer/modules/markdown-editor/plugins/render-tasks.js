@@ -51,6 +51,9 @@
       cbox.type = 'checkbox'
       if (checked) cbox.checked = true
 
+      // If the CodeMirror instance is readOnly, disable the checkbox
+      cbox.disabled = cm.isReadOnly()
+
       let textMarker = cm.markText(
         curFrom, curTo,
         {
@@ -91,7 +94,20 @@
             'inclusiveRight': false
           }
         )
+      } // END onclick
+
+      // We need to listen to readOnly state changes to enable/disable checkboxes
+      const updateHandler = (cm, option) => {
+        if (!document.body.contains(cbox)) {
+          // Remove the event listener again
+          cm.off('optionChange', updateHandler)
+        }
+
+        cbox.disabled = cm.isReadOnly()
       }
+
+      // Listen to option changes
+      cm.on('optionChange', updateHandler)
     }
   }
 })

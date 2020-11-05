@@ -21,7 +21,7 @@
 
   // Now adapt
   --c-primary: var(--blue-0);
-  --c-primary-shade: var(--blue-1);
+  --c-primary-shade: var(--blue-0);
 
   --c-secondary: var(--green-0);
   --c-secondary-shade: var(--green-1);
@@ -62,13 +62,13 @@
 }
 
 @c-primary: @blue-0;
-@c-primary-shade: @blue-1;
+@c-primary-shade: @blue-0;
 
 body {
   /**
    * Change editor font only.
    */
-  #editor {
+  #editor .CodeMirror {
     font-family: @font-crimson;
     font-size: 1.5em;
   }
