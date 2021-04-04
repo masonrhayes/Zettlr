@@ -38,7 +38,7 @@ const CustomCSS = require('./dialog/custom-css.js')
 const ErrorDialog = require('./dialog/error-dialog.js')
 const DevClipboard = require('./dialog/clipboard.js')
 
-const { trans } = require('../common/lang/i18n.js')
+const { trans } = require('../common/i18n.js')
 const localiseNumber = require('../common/util/localise-number')
 const generateFileName = require('../common/util/generate-filename')
 const generateTable = require('../common/util/generate-markdown-table')
@@ -107,7 +107,7 @@ class ZettlrBody {
         // Obviously, focus the editor
         this._renderer.getEditor().focus()
       } else if (focusFileManagerShortcut) { // Cmd/Ctrl+Shift+T
-        this._renderer.getFileManager().focusFileList()
+        this._renderer.getFileManager().focusFilter()
       } else if (event.key === 'F2') {
         // Trigger a rename
         this.requestNewFileName(this._renderer.getActiveFile())
@@ -124,6 +124,21 @@ class ZettlrBody {
         this.notify(message)
       } else if (type === 'error') {
         this.notifyError(message)
+      }
+    })
+
+    /**
+     * Listen to shortcuts from the menu provider
+     *
+     * @param   {string}  shortcut  The shortcut to be triggered
+     */
+    ipcRenderer.on('shortcut', (event, shortcut) => {
+      if (shortcut === 'search') {
+        this.displayFind()
+      } else if (shortcut === 'open-tags-preferences') {
+        this.displayTagsPreferences()
+      } else if (shortcut === 'open-custom-css') {
+        this.displayCustomCss()
       }
     })
   }
@@ -335,13 +350,16 @@ class ZettlrBody {
 
       // The revealjs-button doesn't trigger an export, but the visibility
       // of the themes selection
-      if ($(elem).hasClass('revealjs')) {
+      if (elem.classList.contains('revealjs')) {
         $('#reveal-themes').toggleClass('hidden')
         return
       }
 
-      let ext = $(elem).attr('data-ext')
-      global.ipc.send('export', { 'hash': file.hash, 'ext': ext })
+      global.ipc.send('export', {
+        hash: file.hash,
+        ext: elem.dataset.ext
+      })
+
       global.popupProvider.close()
     })
   }
@@ -370,13 +388,20 @@ class ZettlrBody {
 
   /**
     * Displays the tag preferences with the current settings.
-    * @param  {Object} prefs An object containing the current tags.
     * @return {void}       Nothing to return.
     */
-  displayTagsPreferences (prefs) {
-    this._currentDialog = new TagsPreferences()
-    this._currentDialog.init(prefs).open()
-    this._currentDialog.on('afterClose', (e) => { this._currentDialog = null })
+  displayTagsPreferences () {
+    ipcRenderer.invoke('tag-provider', {
+      command: 'get-coloured-tags'
+    })
+      .then((tags) => {
+        this._currentDialog = new TagsPreferences()
+        this._currentDialog.init(tags).open()
+        this._currentDialog.on('afterClose', (e) => {
+          this._currentDialog = null
+        })
+      })
+      .catch(e => console.error(e))
   }
 
   /**
@@ -385,11 +410,17 @@ class ZettlrBody {
    * @return {void}      Nothing to return.
    */
   displayTagCloud () {
-    global.ipc.send('get-tags-database', {}, (ret) => {
-      this._currentDialog = new TagCloud()
-      this._currentDialog.init(ret).open()
-      this._currentDialog.on('afterClose', (e) => { this._currentDialog = null })
+    ipcRenderer.invoke('tag-provider', {
+      command: 'get-tags-database'
     })
+      .then(tags => {
+        this._currentDialog = new TagCloud()
+        this._currentDialog.init(tags).open()
+        this._currentDialog.on('afterClose', (e) => {
+          this._currentDialog = null
+        })
+      })
+      .catch(e => console.error(e))
   }
 
   /**
@@ -400,7 +431,7 @@ class ZettlrBody {
   displayProjectProperties (prefs) {
     this._currentDialog = new ProjectProperties()
     // We need the project directory's name as a default value
-    prefs.projectDirectory = this.getRenderer().findObject(prefs.hash).name
+    prefs.projectDirectory = this.getRenderer().find(prefs.hash).name
     this._currentDialog.init(prefs).open()
     this._currentDialog.on('afterClose', (e) => { this._currentDialog = null })
   }
@@ -428,11 +459,17 @@ class ZettlrBody {
    * This dialog lets the user edit his/her custom CSS
    */
   displayCustomCss () {
-    global.ipc.send('get-custom-css', {}, (ret) => {
-      this._currentDialog = new CustomCSS()
-      this._currentDialog.init(ret).open()
-      this._currentDialog.on('afterClose', (e) => { this._currentDialog = null })
+    ipcRenderer.invoke('css-provider', {
+      command: 'get-custom-css'
     })
+      .then(css => {
+        this._currentDialog = new CustomCSS()
+        this._currentDialog.init(css).open()
+        this._currentDialog.on('afterClose', (e) => {
+          this._currentDialog = null
+        })
+      })
+      .catch(e => console.error(e))
   }
 
   /**
@@ -440,7 +477,9 @@ class ZettlrBody {
    * @param  {Object} data The statistical data to be shown
    * @return {void}      No return.
    */
-  displayStats (data) {
+  async displayStats () {
+    const data = await ipcRenderer.invoke('stats-provider', { command: 'get-data' })
+
     let context = {
       'displaySum': (data.sumMonth > 99999) ? '>100k' : localiseNumber(data.sumMonth),
       'avgMonth': localiseNumber(data.avgMonth),
@@ -454,13 +493,22 @@ class ZettlrBody {
     global.popupProvider.show('stats', document.querySelector('#toolbar .stats'), context)
 
     $('#more-stats').on('click', (e) => {
-      // Theres no form but the user has clicked the more button
-      this._currentDialog = new StatsDialog()
-      this._currentDialog.init(data.wordCount).open()
-      this._currentDialog.on('afterClose', (e) => { this._currentDialog = null })
-      // After opening the dialog, close the popup. The user probably doesn't
-      // want to click twice to continue writing.
-      global.popupProvider.close()
+      // There's no form but the user has clicked the more button
+      ipcRenderer.invoke('application', { command: 'get-statistics-data' })
+        .then((additionalData) => {
+          this._currentDialog = new StatsDialog()
+          this._currentDialog.init({
+            wordCounts: data.wordCount,
+            fsalStatistics: additionalData
+          }).open()
+          this._currentDialog.on('afterClose', (e) => {
+            this._currentDialog = null
+          })
+          // After opening the dialog, close the popup. The user probably doesn't
+          // want to click twice to continue writing.
+          global.popupProvider.close()
+        })
+        .catch(e => console.error(e))
     })
   }
 
@@ -475,16 +523,21 @@ class ZettlrBody {
     // Now we need to find out if there are selections in the editor that we
     // should respect (i.e. automatically search for this).
     let selections = this._renderer.getEditor().getSelections()
-    if (selections.length > 0) this._findPopup.searchVal = selections[0]
+    if (selections.length > 0 && selections[0].trim().length > 0) {
+      this._findPopup.searchVal = selections[0]
+    }
 
     // Display the popup
-    global.popupProvider.show('find', document.querySelector('.button.find'), this._findPopup, (form) => {
+    global.popupProvider.show('find', document.querySelector('.button.find'), {
+      search: this._findPopup.searchVal,
+      replace: this._findPopup.replaceVal
+    }, (form) => {
       // Remove search cursor once the popup is closed
       global.editorSearch.stop()
     }) // .makePersistent()
 
     const searchForElement = document.getElementById('searchWhat')
-    const searchFor = () => searchForElement.value || ''
+    const searchFor = () => searchForElement.value
     const replaceWithElement = document.getElementById('replaceWhat')
     const replaceWith = () => replaceWithElement.value
     // If a regular expression was restored to the find popup, make sure to set

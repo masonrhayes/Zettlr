@@ -1,6 +1,8 @@
 /* global CodeMirror define */
 // This plugin renders Bear-style heading indicators
 
+const { getHeadRE } = require('../../../../common/regular-expressions');
+
 (function (mod) {
   if (typeof exports === 'object' && typeof module === 'object') { // CommonJS
     mod(require('codemirror/lib/codemirror'))
@@ -12,7 +14,7 @@
 })(function (CodeMirror) {
   'use strict'
 
-  var headRE = /^(#{1,6}) (.*)/g
+  var headRE = getHeadRE()
 
   var currentCallback = null
 
@@ -45,7 +47,7 @@
       curFrom = { 'line': i, 'ch': 0 }
 
       // We can only have one marker at any given position at any given time
-      if (cm.findMarks(curFrom, curTo).length > 0) continue
+      if (cm.doc.findMarks(curFrom, curTo).length > 0) continue
 
       let hTagWrapper = document.createElement('div')
       hTagWrapper.className = 'heading-tag'
@@ -54,7 +56,7 @@
       hTag.textContent = 'h' + headingLevel
       hTagWrapper.appendChild(hTag)
 
-      let textMarker = cm.markText(
+      let textMarker = cm.doc.markText(
         curFrom, curTo,
         {
           'clearOnEnter': true,

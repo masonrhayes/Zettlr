@@ -1,6 +1,8 @@
 /* global CodeMirror define */
 // This plugin renders GitHub Flavoured Markdown Task items
 
+const { getTaskRE } = require('../../../../common/regular-expressions');
+
 (function (mod) {
   if (typeof exports === 'object' && typeof module === 'object') { // CommonJS
     mod(require('codemirror/lib/codemirror'))
@@ -12,7 +14,7 @@
 })(function (CodeMirror) {
   'use strict'
 
-  var taskRE = /^(\s*)([-+*]) \[( |x)\] /g // Matches `- [ ]` and `- [x]`
+  var taskRE = getTaskRE() // Matches `- [ ]` and `- [x]`
 
   CodeMirror.commands.markdownRenderTasks = function (cm) {
     let match
@@ -41,7 +43,7 @@
       let curTo = { 'line': i, 'ch': 5 + leadingSpaces }
 
       // We can only have one marker at any given position at any given time
-      if (cm.findMarks(curFrom, curTo).length > 0) continue
+      if (cm.doc.findMarks(curFrom, curTo).length > 0) continue
 
       // Now we can render it finally.
       let checked = (match[3] === 'x')
@@ -54,7 +56,7 @@
       // If the CodeMirror instance is readOnly, disable the checkbox
       cbox.disabled = cm.isReadOnly()
 
-      let textMarker = cm.markText(
+      let textMarker = cm.doc.markText(
         curFrom, curTo,
         {
           'clearOnEnter': true,
@@ -85,7 +87,7 @@
         let check = (cbox.checked) ? 'x' : ' '
         cm.replaceRange(`${listSign} [${check}]`, curFrom, curTo)
         // ReplaceRange removes the marker, so we have to re-initiate it
-        textMarker = cm.markText(
+        textMarker = cm.doc.markText(
           curFrom, curTo,
           {
             'clearOnEnter': true,

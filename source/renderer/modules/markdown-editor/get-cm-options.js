@@ -27,7 +27,9 @@ module.exports = function () {
     // Default mode: Markdown multiplex (+ syntax highlighting for code blocks)
     mode: 'multiplex',
     // Apply this theme class to prevent the default theme from overriding
-    theme: 'zettlr',
+    theme: 'zettlr-markdown', // Can be zettlr-markdown or zettlr-code
+    // We have different line heights (headings, e.g.)
+    singleCursorHeightPerLine: false,
     // Don't focus on instantiation
     autofocus: false,
     // Necessary to (de)activate the instance programmatically later
@@ -56,10 +58,6 @@ module.exports = function () {
     fullScreen: false,
     // Placeholder for empty instances, necessary to maintain the styling
     placeholder: ' ',
-    hintOptions: {
-      completeSingle: false, // Don't auto-complete, even if there's only one word available
-      hint: (cm, opt) => { return this._autocomplete.hint(cm, opt) }
-    },
     // Soft-wrap longer lines
     lineWrapping: true,
     // Pandoc requires 4 spaces indentation, which is the default

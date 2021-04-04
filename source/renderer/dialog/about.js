@@ -14,7 +14,7 @@
  */
 
 const ZettlrDialog = require('./zettlr-dialog.js')
-const { trans } = require('../../common/lang/i18n')
+const { trans } = require('../../common/i18n')
 const formatDate = require('../../common/util/format-date')
 
 /**
@@ -135,7 +135,7 @@ class AboutDialog extends ZettlrDialog {
       for (let sponsor of data) {
         html += `<li>${sponsor.name}`
         if (sponsor.link) {
-          html += `(<a onclick="require('electron').shell.openExternal('${sponsor.link}')">${sponsor.link}</a>)`
+          html += `(<a href="${sponsor.link})">${sponsor.link}</a>)`
         }
         html += '</li>'
       }

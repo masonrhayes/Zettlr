@@ -5,21 +5,33 @@
   color:white;
   box-shadow: inset -14px 2px 54px -23px rgba(0,0,0,0.75);
 
+  #file-manager-filter {
+    background-color: var(--grey-7);
+    #file-manager-filter-input {
+      background-color: var(--grey-6);
+      color: var(--grey-0);
+
+      &:focus {
+        border-color: var(--c-primary-shade);
+      }
+    }
+  }
+
   div.container {
     div.list-item {
       border-top-color: var(--grey-4);
 
-    &.selected { background-color: var(--grey-6); }
+    &.selected, &.active { background-color: var(--grey-6); }
 
       div.meta {
-        .id, .tags, .directories, .files, .tex-indicator {
+        .id, .tags, .directories, .files, .code-indicator {
           background-color:var(--grey-4);
           color: var(--grey-0);
         }
 
         .date { color: var(--grey-3); }
 
-        .tex-indicator { background-color: var(--c-primary); }
+        .code-indicator { background-color: var(--c-primary); }
 
         .target-progress-indicator {
           circle { fill: var(--grey-4); }
@@ -27,7 +39,7 @@
         }
       }
 
-      &.file:hover {
+      &.file:hover, &.code:hover {
         // important is needed to not mess with the heatmap styles and
         // to overwrite the light theme
         background-color:var(--grey-6) !important;
@@ -38,9 +50,13 @@
         background-color:var(--grey-8);
         color: var(--c-primary-shade);
 
-        .sorter .sortDirection, .sorter .sortType {
+        .sorter {
           background-color: var(--grey-8);
-          &:hover { color: var(--grey-2); }
+        }
+
+        .sorter .sortDirection:hover,
+        .sorter .sortType:hover {
+          color: var(--grey-2);
         }
       }
     }

@@ -20,7 +20,8 @@ import environmentCheck from './util/environment-check'
 
 // Utility functions
 import resolveTimespanMs from './util/resolve-timespan-ms'
-import { loadI18nMain } from '../common/lang/i18n'
+import { loadI18nMain } from '../common/i18n'
+import path from 'path'
 
 // Developer tools
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
@@ -38,8 +39,8 @@ import TagProvider from './service-providers/tag-provider'
 import TargetProvider from './service-providers/target-provider'
 import TranslationProvider from './service-providers/translation-provider'
 import UpdateProvider from './service-providers/update-provider'
-import WatchdogProvider from './service-providers/watchdog-provider'
 import NotificationProvider from './service-providers/notification-provider'
+import StatsProvider from './service-providers/stats-provider'
 
 // We need module-global variables so that garbage collect won't shut down the
 // providers before the app is shut down.
@@ -54,12 +55,25 @@ var tagProvider: TagProvider
 var targetProvider: TargetProvider
 var translationProvider: TranslationProvider
 var updateProvider: UpdateProvider
-var watchdogProvider: WatchdogProvider
 var menuProvider: MenuProvider
 var notificationProvider: NotificationProvider
+var statsProvider: StatsProvider
 
 // Statistics: Record the uptime of the application
 var upTimestamp: number
+
+/**
+ * Catches potential errors during shutdown of certain providers.
+ *
+ * @param   {Provider}      provider  The provider to shut down
+ */
+async function safeShutdown (provider: any): Promise<void> {
+  try {
+    await provider.shutdown()
+  } catch (err) {
+    global.log.error(`[Shutdown] Could not shut down provider ${provider.constructor.name as string}: ${err.message as string}`, err)
+  }
+}
 
 /**
  * Boots the application
@@ -94,7 +108,6 @@ export async function bootApplication (): Promise<void> {
   logProvider = new LogProvider()
   configProvider = new ConfigProvider()
   appearanceProvider = new AppearanceProvider()
-  watchdogProvider = new WatchdogProvider()
   citeprocProvider = new CiteprocProvider()
   dictionaryProvider = new DictionaryProvider()
   recentDocsProvider = new RecentDocsProvider()
@@ -105,6 +118,20 @@ export async function bootApplication (): Promise<void> {
   translationProvider = new TranslationProvider()
   updateProvider = new UpdateProvider()
   notificationProvider = new NotificationProvider()
+  statsProvider = new StatsProvider()
+
+  // If we have a bundled pandoc, unshift its path to env.PATH in order to have
+  // the system search there first for the binary, and not use the internal
+  // one. NOTE: This effectively means users have to restart Zettlr for a change
+  // of the "Use bundled Pandoc?" setting to take effect.
+  const useBundledPandoc = Boolean(global.config.get('export.useBundledPandoc'))
+  if (process.env.PANDOC_PATH !== undefined && useBundledPandoc) {
+    const DELIM = (process.platform === 'win32') ? ';' : ':'
+    const tempPATH = (process.env.PATH as string).split(DELIM)
+    tempPATH.unshift(path.dirname(process.env.PANDOC_PATH))
+    process.env.PATH = tempPATH.join(DELIM)
+    global.log.info('[Application] The bundled pandoc executable is now in PATH. If you do not want to use the bundled pandoc, uncheck the corresponding setting and reboot the app.')
+  }
 
   // Initiate i18n after the config provider has definitely spun up
   let metadata: any = loadI18nMain(global.config.get('appLang'))
@@ -124,19 +151,19 @@ export async function bootApplication (): Promise<void> {
 export async function shutdownApplication (): Promise<void> {
   global.log.info(`さようなら！ Shutting down at ${(new Date()).toString()}`)
   // Shutdown all providers in the reverse order
-  await notificationProvider.shutdown()
-  await updateProvider.shutdown()
-  await translationProvider.shutdown()
-  await cssProvider.shutdown()
-  await targetProvider.shutdown()
-  await tagProvider.shutdown()
-  await menuProvider.shutdown()
-  await recentDocsProvider.shutdown()
-  await dictionaryProvider.shutdown()
-  await citeprocProvider.shutdown()
-  await watchdogProvider.shutdown()
-  await appearanceProvider.shutdown()
-  await configProvider.shutdown()
+  await safeShutdown(notificationProvider)
+  await safeShutdown(updateProvider)
+  await safeShutdown(translationProvider)
+  await safeShutdown(cssProvider)
+  await safeShutdown(targetProvider)
+  await safeShutdown(tagProvider)
+  await safeShutdown(menuProvider)
+  await safeShutdown(recentDocsProvider)
+  await safeShutdown(dictionaryProvider)
+  await safeShutdown(citeprocProvider)
+  await safeShutdown(appearanceProvider)
+  await safeShutdown(configProvider)
+  await safeShutdown(statsProvider)
 
   const downTimestamp = Date.now()
 

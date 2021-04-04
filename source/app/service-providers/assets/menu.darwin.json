@@ -20,11 +20,11 @@
       },
       {
         "label": "menu.tags",
-        "command": "open-tags-preferences"
+        "shortcut": "open-tags-preferences"
       },
       {
         "label": "menu.custom_css",
-        "command": "open-custom-css"
+        "shortcut": "open-custom-css"
       },
       {
         "type": "separator"
@@ -202,7 +202,7 @@
       {
         "label": "menu.find_file",
         "accelerator": "Cmd+F",
-        "command": "file-find"
+        "shortcut": "search"
       },
       {
         "label": "menu.find_dir",
@@ -248,7 +248,7 @@
         "label": "menu.toggle_theme",
         "accelerator": "Cmd+Alt+L",
         "type": "checkbox",
-        "checked": "darkTheme",
+        "checked": "darkMode",
         "command": "toggle-theme"
       },
       {
@@ -291,17 +291,17 @@
       {
         "label": "menu.reset_zoom",
         "accelerator": "Cmd+0",
-        "command": "zoom-reset"
+        "shortcut": "zoom-reset"
       },
       {
         "label": "menu.zoom_in",
         "accelerator": "Cmd+Plus",
-        "command": "zoom-in"
+        "shortcut": "zoom-in"
       },
       {
         "label": "menu.zoom_out",
-        "accelerator": "Cmd+Minus",
-        "command": "zoom-out"
+        "accelerator": "Cmd+-",
+        "shortcut": "zoom-out"
       },
       {
         "type": "separator"
@@ -345,7 +345,7 @@
       {
         "label": "menu.win_minimize",
         "accelerator": "Cmd+M",
-        "role": "minimize"
+        "zettlrRole": "minimize"
       },
       {
         "label": "menu.win_close",
@@ -362,7 +362,7 @@
       {
         "label": "menu.tab_close",
         "accelerator": "Cmd+W",
-        "command": "attempt-close-tab"
+        "shortcut": "close-window"
       },
       {
         "label": "menu.tab_previous",

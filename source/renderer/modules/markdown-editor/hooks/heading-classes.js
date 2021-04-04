@@ -4,51 +4,56 @@
  * @param   {CodeMirror}  cm  The instance
  */
 module.exports = (cm) => {
-  cm.on('cursorActivity', applyHeadingClasses)
-  cm.on('viewportChange', applyHeadingClasses)
-  cm.on('optionChange', applyHeadingClasses)
+  // DEBUG TESTING
+
+  // While taskHandle is undefined, there's no task scheduled. Else, there is.
+  let taskHandle
+
+  const callback = function (cm) {
+    if (taskHandle !== undefined) {
+      return // There's already a task scheduled
+    }
+
+    taskHandle = requestIdleCallback(function () {
+      applyHeadingClasses(cm)
+      taskHandle = undefined // Reset task handle
+    }, { timeout: 1000 }) // Execute after 1 seconds, even if there's a performance penalty involved
+  }
+
+  cm.on('cursorActivity', callback)
+  cm.on('viewportChange', callback)
+  cm.on('optionChange', callback)
 }
 
 function applyHeadingClasses (cm) {
-  let wrapperClass = ''
-  let needsRefresh = false // Will be set to true if at least one line has been altered
-
   // We'll only render the viewport
   const viewport = cm.getViewport()
   for (let i = viewport.from; i < viewport.to; i++) {
-    let oldClass = ''
     const line = cm.getLine(i)
 
-    // Retrieve the wrapper class
-    wrapperClass = cm.lineInfo(i).wrapClass
-
-    // Save the old class name
-    if (/size-header-\d/.test(wrapperClass)) {
-      oldClass = /(size-header-\d)/.exec(wrapperClass)[1]
-    }
-
-    // Then remove all header styles
-    for (let x = 1; x < 7; x++) {
-      cm.removeLineClass(i, 'wrap', `size-header-${x}`)
-    }
+    const headerClass = retrieveHeaderClass(cm, i)
 
     // Only re-apply a header class if allowed.
     if (cm.getModeAt({ 'line': i, 'ch': 0 }).name !== 'markdown') {
-      // Indicate a refresh if necessary
-      if (oldClass !== '') needsRefresh = true
+      if (headerClass > 0) {
+        removeHeaderClass(cm, i, headerClass)
+      }
       continue
     }
 
     // Then re-add the header classes as appropriate.
     let match = /^(#{1,6}) /.exec(line)
     if (match) {
-      cm.addLineClass(i, 'wrap', `size-header-${match[1].length}`)
-      // If the new header class is different
-      // than the old one, indicate a refresh.
-      if (oldClass !== `size-header-${match[1].length}`) needsRefresh = true
+      maybeUpdateHeaderClass(cm, i, match[1].length)
+      continue // Finished
+    } else if (headerClass > 0) {
+      removeHeaderClass(cm, i, headerClass)
+      continue
     }
 
-    if (i === 0) continue // No need to check for Setext header
+    if (i === 0) {
+      continue // No need to check for Setext header
+    }
 
     // Check for Setext headers. According to the CommonMark
     // spec: At most 3 preceeding spaces, no internal spaces
@@ -84,20 +89,56 @@ function applyHeadingClasses (cm) {
 
       // Add the correct line classes to both lines
       for (let line = begin; line <= i; line++) {
-        cm.addLineClass(line, 'wrap', `size-header-${level}`)
-      }
-
-      // If the new header class is different
-      // than the old one, indicate a refresh.
-      if (oldClass !== `size-header-${level}`) {
-        needsRefresh = true
+        maybeUpdateHeaderClass(cm, line, level)
       }
     }
   }
+}
 
-  // If at least one header class has been altered, refresh the codemirror
-  // instance as the sizes won't match up in that case.
-  if (needsRefresh) {
-  //   cm.refresh()
+/**
+ * Retrieves a heading class if there is one. Returns 0 if no header class was
+ * detected.
+ *
+ * @param   {CodeMirror}  cm    The CodeMirror instance
+ * @param   {number}      line  The line number
+ *
+ * @return  {number}            The header class, between 1 and 6, or 0 if no class was found.
+ */
+function retrieveHeaderClass (cm, line) {
+  const lineInfo = cm.doc.lineInfo(line)
+  const match = /size-header-([1-6])/.exec(lineInfo.wrapClass)
+
+  if (match !== null) {
+    return parseInt(match[1], 10)
+  } else {
+    return 0
+  }
+}
+
+/**
+ * Removes the given header class from the line
+ *
+ * @param   {CodeMirror}  cm           The CodeMirror instance
+ * @param   {number}      line         The affected line
+ * @param   {number}      classNumber  The class to remove
+ */
+function removeHeaderClass (cm, line, classNumber) {
+  cm.doc.removeLineClass(line, 'wrap', `size-header-${classNumber}`)
+}
+
+/**
+ * Updates the line class to newClass if applicable
+ *
+ * @param   {CodeMirror}  cm        The CodeMirror instance
+ * @param   {number}      line      The line
+ * @param   {number}      newClass  The new class 1-6 to be applied
+ */
+function maybeUpdateHeaderClass (cm, line, newClass) {
+  const headerClass = retrieveHeaderClass(cm, line)
+  if (headerClass !== newClass) {
+    if (headerClass > 0) {
+      removeHeaderClass(cm, line, headerClass)
+    }
+    cm.doc.addLineClass(line, 'wrap', `size-header-${newClass}`)
   }
 }

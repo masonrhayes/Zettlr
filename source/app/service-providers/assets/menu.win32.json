@@ -53,6 +53,30 @@
         "command": "print"
       },
       {
+        "label": "menu.preferences",
+        "submenu": [
+          {
+            "label": "menu.preferences",
+            "id": "preferences-item",
+            "accelerator": "Ctrl+,",
+            "command": "open-preferences"
+          },
+          {
+            "label": "menu.pdf_preferences",
+            "accelerator": "Ctrl+Alt+,",
+            "command": "open-pdf-preferences"
+          },
+          {
+            "label": "menu.tags",
+            "shortcut": "open-tags-preferences"
+          },
+          {
+            "label": "menu.custom_css",
+            "shortcut": "open-custom-css"
+          }
+        ]
+      },
+      {
         "type": "separator"
       },
       {
@@ -88,24 +112,6 @@
         "label": "menu.delete_dir",
         "accelerator": "Ctrl+Delete",
         "command": "dir-delete"
-      },
-      {
-        "label": "menu.preferences",
-        "accelerator": "Ctrl+,",
-        "command": "open-preferences"
-      },
-      {
-        "label": "menu.pdf_preferences",
-        "accelerator": "Ctrl+Alt+,",
-        "command": "open-pdf-preferences"
-      },
-      {
-        "label": "menu.tags",
-        "command": "open-tags-preferences"
-      },
-      {
-        "label": "menu.custom_css",
-        "command": "open-custom-css"
       },
       { "type": "separator" },
       {
@@ -168,7 +174,7 @@
       {
         "label": "menu.find_file",
         "accelerator": "Ctrl+F",
-        "command": "file-find"
+        "shortcut": "search"
       },
       {
         "label": "menu.find_dir",
@@ -198,7 +204,7 @@
         "label": "menu.toggle_theme",
         "accelerator": "Ctrl+Alt+L",
         "type": "checkbox",
-        "checked": "darkTheme",
+        "checked": "darkMode",
         "command": "toggle-theme"
       },
       {
@@ -241,23 +247,24 @@
       {
         "label": "menu.reset_zoom",
         "accelerator": "Ctrl+0",
-        "command": "zoom-reset"
+        "shortcut": "zoom-reset"
       },
       {
         "label": "menu.zoom_in",
         "accelerator": "Ctrl+Plus",
-        "command": "zoom-in"
+        "shortcut": "zoom-in"
       },
       {
         "label": "menu.zoom_out",
-        "accelerator": "Ctrl+Minus",
-        "command": "zoom-out"
+        "accelerator": "Ctrl+-",
+        "shortcut": "zoom-out"
       },
       {
         "type": "separator"
       },
       {
         "label": "menu.toggle_fullscreen",
+        "accelerator": "F11",
         "role": "togglefullscreen"
       }
     ]
@@ -295,7 +302,7 @@
       {
         "label": "menu.win_minimize",
         "accelerator": "Ctrl+M",
-        "role": "minimize"
+        "zettlrRole": "minimize"
       },
       {
         "label": "menu.win_close",
@@ -308,7 +315,7 @@
       {
         "label": "menu.tab_close",
         "accelerator": "Ctrl+W",
-        "command": "attempt-close-tab"
+        "shortcut": "close-window"
       },
       {
         "label": "menu.tab_previous",

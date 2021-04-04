@@ -10,13 +10,11 @@
 * Description:     Handles communication with the main process. There are
 *                  three channels that are used for communication:
 *                  - message: The default channel for most of the stuff (async)
-*                  - config: Retrieve configuration values (sync)
-*                  - typo: Retrieve dictionary functions (sync)
 *
 * END HEADER
 */
 
-const { trans } = require('../common/lang/i18n.js')
+const { trans } = require('../common/i18n.js')
 const { clipboard } = require('electron')
 const ipc = require('electron').ipcRenderer
 
@@ -76,32 +74,6 @@ class ZettlrRendererIPC {
     this._bufferedMessage = null
     this._callbackBuffer = {}
     this._onceCallbacks = []
-
-    // This is an object that will hold all previously checked words in the form
-    // of word: correct?
-    // We are explicitly omitting the prototype stuff, as we don't access this.
-    this._invalidateDictionaryBuffer()
-    this._typoCheck = false
-    // Activate typocheck after 2 seconds to speed up the app's start
-    setTimeout(() => { this._typoCheck = true }, 2000)
-
-    // Inject typo spellcheck and suggest functions into the globals
-    global.typo = {
-      check: (term) => {
-        if (!this._typoCheck) return true // Give the dictionaries some time to heat up
-        // Return cache if possible
-        if (this._typoCache[term] !== undefined) return this._typoCache[term]
-        // Save into the corresponding cache and return the query result
-        // Return the query result
-        let correct = ipc.sendSync('typo', { 'type': 'check', 'term': term })
-        if (correct === 'not-ready') return true // Don't check unless its ready
-        this._typoCache[term] = correct
-        return correct
-      },
-      suggest: (term) => {
-        return ipc.sendSync('typo', { 'type': 'suggest', 'term': term })
-      }
-    }
 
     // Sends an array of IDs to main. If they are found in the JSON, cool! Otherwise
     // this will return false.
@@ -210,15 +182,6 @@ class ZettlrRendererIPC {
   }
 
   /**
-   * Invalidates the complete dictionary buffer. Necessary to retrieve accurate
-   * messages whenever the dictionaries change during runtime.
-   * @return {void} Does not return.
-   */
-  _invalidateDictionaryBuffer () {
-    this._typoCache = Object.create(null)
-  }
-
-  /**
   * Switch over the received message.
   * @param {String} cmd The command
   * @param  {Object} cnt   The message's body
@@ -302,16 +265,6 @@ class ZettlrRendererIPC {
         this.send('root-file-open')
         break
 
-      // The user wants to open a dir externally (= in finder etc)
-      case 'dir-open-externally':
-        require('electron').shell.openPath(this._app.findObject(parseInt(cnt.hash, 10)).path)
-          .then(potentialError => {
-            if (potentialError !== '') {
-              console.error('Could not open attachment:' + potentialError)
-            }
-          })
-        break
-
       case 'dir-rename':
         this._app.renameDir(cnt)
         break
@@ -344,11 +297,6 @@ class ZettlrRendererIPC {
 
       case 'dir-project-export':
         this.send('dir-project-export', cnt)
-        break
-
-      // Emanates from the context menu, so simply send it to main
-      case 'dir-rescan':
-        this.send(cmd, cnt)
         break
 
       // Copy the current file's ID to the clipboard
@@ -439,10 +387,6 @@ class ZettlrRendererIPC {
         this._app.newFile(cnt)
         break
 
-      case 'file-find':
-        this._app.getBody().displayFind()
-        break
-
       case 'file-duplicate':
         this._app.getBody().requestDuplicate(cnt)
         break
@@ -498,14 +442,6 @@ class ZettlrRendererIPC {
         this.send('get-pdf-preferences')
         break
 
-      case 'open-tags-preferences':
-        this.send('get-tags-preferences')
-        break
-
-      case 'open-custom-css':
-        this._app.getBody().displayCustomCss()
-        break
-
       case 'preferences':
         this._app.getBody().displayPreferences(cnt)
         break
@@ -524,11 +460,6 @@ class ZettlrRendererIPC {
 
       case 'set-tags':
         global.store.set('tags', cnt)
-        break
-
-      // Update the editor's tag database
-      case 'tags-database':
-        this._app.getEditor().setTagDatabase(cnt)
         break
 
       // Display the informative tag cloud
@@ -563,17 +494,6 @@ class ZettlrRendererIPC {
         this._app.getPomodoro().popup()
         break
 
-      // Zoom
-      case 'zoom-reset':
-        this._app.getEditor().zoom(0) // <-- Sometimes I think I am stupid. Well, but it works, I guess.
-        break
-      case 'zoom-in':
-        this._app.getEditor().zoom(1)
-        break
-      case 'zoom-out':
-        this._app.getEditor().zoom(-1)
-        break
-
       // About dialog
       case 'display-about':
         this._app.getBody().displayAbout()
@@ -589,11 +509,7 @@ class ZettlrRendererIPC {
 
       // Stats
       case 'show-stats':
-        this.send('request-stats-data')
-        break
-
-      case 'stats-data':
-        this._app.getBody().displayStats(cnt)
+        this._app.getBody().displayStats()
         break
 
       // Generate a new ID
@@ -654,12 +570,6 @@ class ZettlrRendererIPC {
       /**
        * TAB FUNCTIONALITY
        */
-      case 'attempt-close-tab':
-        // First, attempt to close a tab. If this function returns false, this
-        // means there are no open tabs, so we can safely close the window.
-        if (!this._app.getEditor().attemptCloseTab()) this.send('win-close')
-        break
-
       case 'select-next-tab':
         this._app.getEditor().selectNextTab()
         break

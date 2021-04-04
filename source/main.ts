@@ -54,8 +54,7 @@ global.log = {
   },
   error: (message: string) => {
     global.preBootLog.push({ 'level': 4, 'message': message })
-  },
-  showLogViewer: () => { /* Dummy method to fulfill interface contract */ }
+  }
 }
 
 /**
@@ -65,18 +64,46 @@ global.log = {
 let zettlr: Zettlr|null = null
 
 /**
+ * This variable is being used to determine if all servive providers have
+ * successfully shut down and we can actually quit the app.
+ *
+ * @var {boolean}
+ */
+let canQuit: boolean = false
+
+/**
  * Hook into the ready event and initialize the main object creating everything
  * else. It is necessary to wait for the ready event, because prior, some APIs
  * may not work correctly.
  */
 app.whenReady().then(() => {
+  // Override the about panel options so that a little bit more is being shown.
+  // Makes only sense for macOS, as we don't call the showAboutPanel() method
+  // programmatically, but either way, it's a little bit nicer.
+  app.setAboutPanelOptions({
+    applicationName: 'Zettlr',
+    applicationVersion: app.getVersion(),
+    copyright: `Copyright (c) 2017 - ${(new Date()).getFullYear()} by Hendrik Erz. Licensed via GNU GPL 3.0`,
+    // version: If we ever introduce a build number. This defaults to the Electron version.
+    credits: 'We would like to thank all contributors to the app, its translators, and those who meticulously update the documentation.',
+    authors: ['Hendrik Erz'], // TODO: Somehow generate the contributors list.
+    website: 'https://www.zettlr.com/',
+    iconPath: process.execPath
+  })
   // Immediately boot the application. This function performs some initial
   // checks to make sure the environment is as expected for Zettlr, and boots
   // up the providers.
   bootApplication().then(() => {
     // Now instantiate the main class which will care about everything else
     zettlr = new Zettlr()
-  }).catch(err => console.error(err))
+    zettlr.init().catch(err => {
+      console.error(err)
+      app.exit(1)
+    })
+  }).catch(err => {
+    console.error(err)
+    app.exit(1)
+  })
 }).catch(e => console.error(e))
 
 /**
@@ -130,14 +157,8 @@ app.on('open-file', (e, p) => {
 app.on('window-all-closed', function () {
   // On OS X it is common for applications and their menu bar
   // to stay active until the user quits explicitly with Cmd + Q
-  if (process.platform !== 'darwin' && zettlr !== null) {
-    // Shutdown the app before quitting
-    Promise.all([
-      shutdownApplication(),
-      zettlr.shutdown()
-    ])
-      .catch(err => console.error(err))
-      .finally(() => app.quit())
+  if (process.platform !== 'darwin') {
+    app.quit()
   }
 })
 
@@ -146,13 +167,25 @@ app.on('window-all-closed', function () {
  * properly.
  */
 app.on('will-quit', function (event) {
-  if (zettlr !== null) {
-    Promise.all([
-      shutdownApplication(),
-      zettlr.shutdown()
-    ])
-      .catch(err => console.error(err))
+  if (!canQuit) {
+    // Prevent immediate shutdown and allow the process to shut down first
+    event.preventDefault()
+  } else {
+    return // Don't prevent quitting, but we don't need to shut down again.
   }
+
+  const promises = [shutdownApplication()]
+  if (zettlr !== null) {
+    promises.push(zettlr.shutdown())
+  }
+  Promise.all(promises)
+    .then(() => {
+      // Now we can safely quit the app. Set the flag so that the callback
+      // won't stop the shutdown, and programmatically quit the app.
+      canQuit = true
+      app.quit()
+    })
+    .catch(err => console.error(err))
 })
 
 /**
@@ -160,7 +193,7 @@ app.on('will-quit', function (event) {
  */
 app.on('activate', function () {
   if (zettlr !== null) {
-    zettlr.openWindow()
+    zettlr.openAnyWindow()
   }
 })
 

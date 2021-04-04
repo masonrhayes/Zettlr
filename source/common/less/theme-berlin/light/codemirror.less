@@ -7,6 +7,11 @@
 #editor .CodeMirror, .quicklook .body .CodeMirror, .dialog .CodeMirror {
     color:rgb(46, 56, 60);
 
+    &.cm-s-zettlr-code {
+      // Code files have this theme applied (others have cm-s-zettlr-markdown)
+      font-family: @font-code;
+    }
+
     &.cm-stex-mode, &.cm-css-mode {
       font-family: @font-code;
         .cm-comment    { color: var(--grey-2); }
@@ -78,7 +83,18 @@
       // Prevent skipping of low-baseline chars to prevent strange artefacts
       text-decoration-skip-ink: none;
     }
-    .cm-zkn-tag, .cm-zkn-id, .cm-zkn-link, .cm-zkn-link-formatting { color:var(--c-primary); }
+    .cm-zkn-tag,
+    .cm-zkn-id,
+    .cm-zkn-link,
+    .cm-zkn-link-formatting,
+    .cm-footnote-formatting {
+      color:var(--c-primary);
+    }
+
+    .cm-footnote-formatting {
+      font-weight: bold;
+    }
+
     // cma = code-mirror-anchor
     .cma { color: var(--c-primary); font-weight: inherit; }
 
@@ -169,41 +185,42 @@
       margin-top: -2px;
       margin-bottom: -2px;
     }
-
-    // Hint related stuff
-    .CodeMirror-hints {
-      -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
-      -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
-      box-shadow: 2px 3px 5px rgba(0,0,0,.2);
-      border-radius: @border-radius;
-      border: 1px solid var(--grey-1);
-
-      background: white;
-      font-size: 90%;
-      li.CodeMirror-hint {
-        color: var(--grey-7);
-
-        &:hover { background-color: var(--grey-0); }
-      }
-
-      li.CodeMirror-hint-active {
-        background: var(--c-primary);
-        color: var(--grey-0);
-
-        &:hover { background-color: var(--c-primary-shade); }
-      }
-
-      // Special tags
-      .cm-hint-colour {
-        color: var(--grey-3);
-        background-color: var(--grey-2);
-      }
-    }
 }
 
 .CodeMirror-focused .CodeMirror-selected { background-color: var(--selection-light); }
 .CodeMirror .CodeMirror-selected { background-color: var(--selection-light); }
 .CodeMirror-cursor { background: var(--c-primary); }
+
+// Hint related stuff. Hints mustn't be scoped by .CodeMirror as they are
+// attached to document.body, not the editor
+.CodeMirror-hints {
+  -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  border-radius: @border-radius;
+  border: 1px solid var(--grey-1);
+
+  background: white;
+  font-size: 90%;
+  li.CodeMirror-hint {
+    color: var(--grey-7);
+
+    &:hover { background-color: var(--grey-0); }
+  }
+
+  li.CodeMirror-hint-active {
+    background: var(--c-primary);
+    color: var(--grey-0);
+
+    &:hover { background-color: var(--c-primary-shade); }
+  }
+
+  // Special tags
+  .cm-hint-colour {
+    color: var(--grey-3);
+    background-color: var(--grey-2);
+  }
+}
 
 // Custom styling for the various editors across the app
 // -----------------------------------------------------------------------------

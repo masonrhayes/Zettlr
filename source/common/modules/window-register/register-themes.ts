@@ -22,11 +22,11 @@ type Theme = 'berlin'|'bielefeld'|'frankfurt'|'karl-marx-stadt'|'bordeaux'
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 var availableThemes: Record<Theme, ThemeLoader> = {
-  'berlin': require('../../less/theme-berlin/theme-main.less') as ThemeLoader,
-  'bielefeld': require('../../less/theme-bielefeld/theme-main.less') as ThemeLoader,
-  'frankfurt': require('../../less/theme-frankfurt/theme-main.less') as ThemeLoader,
-  'karl-marx-stadt': require('../../less/theme-karl-marx-stadt/theme-main.less') as ThemeLoader,
-  'bordeaux': require('../../less/theme-bordeaux/theme-main.less') as ThemeLoader
+  'berlin': require('../../less/theme-berlin/theme-main.less').default as ThemeLoader,
+  'bielefeld': require('../../less/theme-bielefeld/theme-main.less').default as ThemeLoader,
+  'frankfurt': require('../../less/theme-frankfurt/theme-main.less').default as ThemeLoader,
+  'karl-marx-stadt': require('../../less/theme-karl-marx-stadt/theme-main.less').default as ThemeLoader,
+  'bordeaux': require('../../less/theme-bordeaux/theme-main.less').default as ThemeLoader
 }
 
 /**
@@ -49,7 +49,7 @@ export default function registerThemes (): void {
       switchTheme(global.config.get('display.theme'))
 
       // Switch to light/dark mode based on the configuration variable
-      document.body.classList.toggle('dark', global.config.get('darkTheme'))
+      document.body.classList.toggle('dark', global.config.get('darkMode'))
     }
   })
 
@@ -63,13 +63,12 @@ export default function registerThemes (): void {
 
   // Initial theme change
   switchTheme(global.config.get('display.theme'))
-  document.body.classList.toggle('dark', global.config.get('darkTheme'))
+  document.body.classList.toggle('dark', global.config.get('darkMode'))
 
   // Initial rendering of the Custom CSS
-  ipcRenderer.send('css-provider', {
-    command: 'get-custom-css-path',
-    payload: undefined
-  })
+  ipcRenderer.invoke('css-provider', { command: 'get-custom-css-path' })
+    .then(cssPath => setCustomCss(cssPath))
+    .catch(e => console.error(e))
 }
 
 /**

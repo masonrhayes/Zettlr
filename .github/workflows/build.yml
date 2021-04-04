@@ -57,28 +57,45 @@ jobs:
           echo ::set-output name=version::$pkgver
       - name: Set up build environment
         run: yarn install --frozen-lockfile
-      - name: Build Windows NSIS installer (x32 and x64)
-        # Make sure to sign the windows installer using the corresponding SSL EV.
-        run: yarn release:win
+      - name: Build the reveal.js templates
+        run: yarn reveal:build
+      - name: Download Pandoc (64 bit)
+        run: ./scripts/get-pandoc.sh win32
+      # Create the windows binaries. First package both for x64 and arm64, then
+      # make an NSIS installer. Make sure to sign the windows installer using
+      # the corresponding SSL EV.
+      - name: Package Windows (x64)
+        run: yarn package:win-x64
         env:
           CSC_LINK: ${{ secrets.WIN_CERT }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASS }}
-      - name: Cache artifact (x32 and x64)
-        uses: actions/upload-artifact@v1
-        with:
-          name: Zettlr-${{steps.ref.outputs.version}}.exe
-          path: ./release/Zettlr-${{steps.ref.outputs.version}}.exe
-      - name: Build Windows NSIS installer (arm64)
-        # Make sure to sign the windows installer using the corresponding SSL EV.
+      - name: Package Windows (arm64)
+        run: yarn package:win-arm
+        env:
+          CSC_LINK: ${{ secrets.WIN_CERT }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASS }}
+      - name: Build NSIS installer (x64)
+        run: yarn release:win-x64
+        env:
+          CSC_LINK: ${{ secrets.WIN_CERT }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASS }}
+      # We need to rename the artifact prior to uploading so that the x64 and
+      # arm64 releases do not overwrite themselves.
+      - name: Rename x64 artifact
+        run: mv ./release/Zettlr-${{steps.ref.outputs.version}}.exe ./release/Zettlr-${{steps.ref.outputs.version}}-x64.exe
+      - name: Build NSIS installer (arm64)
         run: yarn release:win-arm
         env:
           CSC_LINK: ${{ secrets.WIN_CERT }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASS }}
       - name: Rename arm64 artifact
-        # We need to rename the artifact prior to uploading so that it does not
-        # overwrite the first release artifact for 32 and 64 bit desktop architectures
         run: mv ./release/Zettlr-${{steps.ref.outputs.version}}.exe ./release/Zettlr-${{steps.ref.outputs.version}}-arm64.exe
-      - name: Cache artifact (arm64)
+      - name: Cache NSIS installer (x64)
+        uses: actions/upload-artifact@v1
+        with:
+          name: Zettlr-${{steps.ref.outputs.version}}-x64.exe
+          path: ./release/Zettlr-${{steps.ref.outputs.version}}-x64.exe
+      - name: Cache NSIS installer (arm64)
         uses: actions/upload-artifact@v1
         with:
           # It is important to understand that "name" does NOT refer to the
@@ -109,6 +126,10 @@ jobs:
           echo ::set-output name=version::$pkgver
       - name: Set up build environment
         run: yarn install --frozen-lockfile
+      - name: Build the reveal.js templates
+        run: yarn reveal:build
+      - name: Download Pandoc (64 bit)
+        run: ./scripts/get-pandoc.sh darwin
       # Save the macOS certificate on this runner for forge to access it in the
       # next step below.
       - name: Retrieve code signing certificate
@@ -116,18 +137,45 @@ jobs:
         env:
           MACOS_CERT: ${{ secrets.MACOS_CERT }}
           MACOS_CERT_PASS: ${{ secrets.MACOS_CERT_PASS }}
+      # Now, finally build the app itself. This is done in four steps: First,
+      # two steps make sure that the app is correctly bundled in ./out, then
+      # the next two steps use electron builder to create the DMG files.
       # This step also signs and notarizes the app. NOTE that forge does this,
       # as we shall not notarize and/or sign the resulting DMG file as well!
-      - name: Build macOS DMG file
-        run: yarn release:mac
+      - name: Package macOS (x64)
+        run: yarn package:mac-x64
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
-      - name: Cache macOS release
+      - name: Package macOS (arm64)
+        run: yarn package:mac-arm
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+      - name: Build macOS image file (x64)
+        run: yarn release:mac-x64
+        # We need to rename the artifact prior to uploading so that the x64 and
+        # arm64 releases do not overwrite themselves.
+      - name: Rename x64 artifact
+        run: mv ./release/Zettlr-${{steps.ref.outputs.version}}.dmg ./release/Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+      # Now the same procedure for arm64: First build ...
+      - name: Build macOS image file (arm64)
+        run: yarn release:mac-arm
+      # ... then rename
+      - name: Rename arm64 artifact
+        run: mv ./release/Zettlr-${{steps.ref.outputs.version}}.dmg ./release/Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
+      # Finally upload both
+      - name: Cache macOS release (x64)
         uses: actions/upload-artifact@v1
         with:
-          name: Zettlr-${{steps.ref.outputs.version}}.dmg
-          path: ./release/Zettlr-${{steps.ref.outputs.version}}.dmg
+          name: Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+          path: ./release/Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+      # And now the same for arm64
+      - name: Cache macOS release (arm64)
+        uses: actions/upload-artifact@v1
+        with:
+          name: Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
+          path: ./release/Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
 
   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
   #                                                                           #
@@ -151,8 +199,18 @@ jobs:
           echo ::set-output name=version::$pkgver
       - name: Set up build environment
         run: yarn install --frozen-lockfile
-      - name: Build Linux targets
-        run: yarn release:linux
+      - name: Build the reveal.js templates
+        run: yarn reveal:build
+      - name: Download Pandoc (64 bit)
+        run: ./scripts/get-pandoc.sh linux
+      - name: Package Linux targets (x32)
+        run: yarn package:linux-x32
+      - name: Create Linux installers (x32)
+        run: yarn release:linux-x32
+      - name: Package Linux targets (x64)
+        run: yarn package:linux-x64
+      - name: Create Linux installers (x64)
+        run: yarn release:linux-x64
       - name: Cache .deb release
         uses: actions/upload-artifact@v1
         with:
@@ -174,7 +232,12 @@ jobs:
           name: Zettlr-${{steps.ref.outputs.version}}-x86_64.AppImage
           path: ./release/Zettlr-${{steps.ref.outputs.version}}-x86_64.AppImage
 
-  # after the three builds, this job downloads all assets, creates and verifies
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  #                                                                           #
+  #                          PREPARE RELEASE DRAFT                            #
+  #                                                                           #
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  # After the three builds, this job downloads all assets, creates and verifies
   # SHA256 checksums, and finally creates a release draft and uploads all
   # assets to it.
   prepare_release:
@@ -195,20 +258,25 @@ jobs:
           pkgver=$(node ./scripts/get-pkg-version.js)
           echo ::set-output name=version::$pkgver
       # First, download all resulting assets from the previous steps.
-      - name: Download NSIS installer
+      - name: Download NSIS installer (x64)
         uses: actions/download-artifact@v1
         with:
-          name: Zettlr-${{steps.ref.outputs.version}}.exe
+          name: Zettlr-${{steps.ref.outputs.version}}-x64.exe
           path: .
-      - name: Download NSIS-installer (arm64)
+      - name: Download NSIS installer (arm64)
         uses: actions/download-artifact@v1
         with:
           name: Zettlr-${{steps.ref.outputs.version}}-arm64.exe
           path: .
-      - name: Download macOS image
+      - name: Download macOS image (x64)
         uses: actions/download-artifact@v1
         with:
-          name: Zettlr-${{steps.ref.outputs.version}}.dmg
+          name: Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+          path: .
+      - name: Download macOS image (arm64)
+        uses: actions/download-artifact@v1
+        with:
+          name: Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
           path: .
       - name: Download .deb-installer
         uses: actions/download-artifact@v1
@@ -234,9 +302,10 @@ jobs:
       # SHA-checksums file and then upload everything!
       - name: Generate SHA256 checksums
         run: |
-          sha256sum "Zettlr-${{steps.ref.outputs.version}}.exe" > "SHA256SUMS.txt"
+          sha256sum "Zettlr-${{steps.ref.outputs.version}}-x64.exe" > "SHA256SUMS.txt"
           sha256sum "Zettlr-${{steps.ref.outputs.version}}-arm64.exe" >> "SHA256SUMS.txt"
-          sha256sum "Zettlr-${{steps.ref.outputs.version}}.dmg" >> "SHA256SUMS.txt"
+          sha256sum "Zettlr-${{steps.ref.outputs.version}}-x64.dmg" >> "SHA256SUMS.txt"
+          sha256sum "Zettlr-${{steps.ref.outputs.version}}-arm64.dmg" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{steps.ref.outputs.version}}-amd64.deb" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{steps.ref.outputs.version}}-x86_64.rpm" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{steps.ref.outputs.version}}-i386.AppImage" >> "SHA256SUMS.txt"
@@ -250,20 +319,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{steps.ref.outputs.version}} # tag_name is required, but can be overridden during edit
-          release_name: Release ${{steps.ref.outputs.version}} # release_name is required
+          tag_name: v${{steps.ref.outputs.version}} # tag_name is required, but can be overridden during edit
+          release_name: Release v${{steps.ref.outputs.version}} # release_name is required
           body: If you can read this, we have forgotten to fill in the changelog. Sorry!
           draft: true # Always create as draft, so that we can populate the remaining values easily
 
       # And finally, upload that shit
-      - name: Upload NSIS installer
+      - name: Upload NSIS installer (x64)
         uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./Zettlr-${{steps.ref.outputs.version}}.exe
-          asset_name: Zettlr-${{steps.ref.outputs.version}}.exe
+          asset_path: ./Zettlr-${{steps.ref.outputs.version}}-x64.exe
+          asset_name: Zettlr-${{steps.ref.outputs.version}}-x64.exe
           asset_content_type: application/x-msdownload
       - name: Upload NSIS installer (arm64)
         uses: actions/upload-release-asset@v1.0.1
@@ -274,14 +343,23 @@ jobs:
           asset_path: ./Zettlr-${{steps.ref.outputs.version}}-arm64.exe
           asset_name: Zettlr-${{steps.ref.outputs.version}}-arm64.exe
           asset_content_type: application/x-msdownload
-      - name: Upload macOS image
+      - name: Upload macOS image (x64)
         uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./Zettlr-${{steps.ref.outputs.version}}.dmg
-          asset_name: Zettlr-${{steps.ref.outputs.version}}.dmg
+          asset_path: ./Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+          asset_name: Zettlr-${{steps.ref.outputs.version}}-x64.dmg
+          asset_content_type: application/octet-stream
+      - name: Upload macOS image (arm64)
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
+          asset_name: Zettlr-${{steps.ref.outputs.version}}-arm64.dmg
           asset_content_type: application/octet-stream
       - name: Upload .deb installer
         uses: actions/upload-release-asset@v1.0.1

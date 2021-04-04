@@ -12,7 +12,7 @@
  * END HEADER
  */
 
-const { trans } = require('../../common/lang/i18n')
+const { trans } = require('../../common/i18n')
 const { ipcRenderer } = require('electron')
 const path = require('path')
 const tippy = require('tippy.js').default
@@ -254,6 +254,7 @@ module.exports = class EditorTabs {
     if (elem.classList.contains('filename')) elem = elem.parentElement
     if (elem.getAttribute('id') === 'document-tabs') return // No file selected
     const currentHash = elem.dataset['hash']
+    const filename = elem.dataset['filename']
 
     const items = [
       {
@@ -283,12 +284,14 @@ module.exports = class EditorTabs {
     ]
 
     const point = { x: event.clientX, y: event.clientY }
-    console.log(elem)
 
     global.menuProvider.show(point, items, (clickedID) => {
       switch (clickedID) {
         case 'file-rename':
-          global.popupProvider.show('textfield', elem, { val: '', placeholder: trans('dialog.file_rename.placeholder') }, (form) => {
+          global.popupProvider.show('textfield', elem, {
+            val: filename,
+            placeholder: trans('dialog.file_rename.placeholder')
+          }, (form) => {
             if (form !== null) {
               ipcRenderer.send('message', {
                 command: 'file-rename',
@@ -326,20 +329,28 @@ module.exports = class EditorTabs {
     // Then create the document div
     let doc = document.createElement('div')
     doc.classList.add('document')
+    doc.setAttribute('role', 'tab')
+    doc.setAttribute('aria-label', displayTitle)
     doc.setAttribute('draggable', 'true') // Users can drag that thing around
     doc.dataset['hash'] = file.hash
+    doc.dataset['filename'] = file.name
     doc.dataset['id'] = file.id
     // Show some additional information on hover
     doc.dataset['tippyContent'] = `<strong>${file.name}</strong><br>`
     doc.dataset['tippyContent'] += `<small>(${path.basename(path.dirname(file.path))})</small><br>`
-    doc.dataset['tippyContent'] += localizeNumber(file.wordCount) + ' ' + trans('dialog.target.words')
-    doc.dataset['tippyContent'] += ', ' + localizeNumber(file.charCount) + ' ' + trans('dialog.target.chars')
-    // From here on, possible information begins, so we have to add <br>s before
-    if (file.id !== '') doc.dataset['tippyContent'] += '<br>ID: ' + file.id
-    if (file.tags.length > 0) doc.dataset['tippyContent'] += '<br>' + file.tags.map(tag => '<span class="tag">#' + tag + '</span>').join(' ')
+    if (file.type === 'file') {
+      doc.dataset['tippyContent'] += localizeNumber(file.wordCount) + ' ' + trans('dialog.target.words')
+      doc.dataset['tippyContent'] += ', ' + localizeNumber(file.charCount) + ' ' + trans('dialog.target.chars')
+      // From here on, possible information begins, so we have to add <br>s before
+      if (file.id !== '') doc.dataset['tippyContent'] += '<br>ID: ' + file.id
+      if (file.tags.length > 0) doc.dataset['tippyContent'] += '<br>' + file.tags.map(tag => '<span class="tag">#' + tag + '</span>').join(' ')
+    }
 
     // Mark it as active and/or modified, if applicable
-    if (active) doc.classList.add('active')
+    if (active) {
+      doc.classList.add('active')
+      doc.setAttribute('aria-selected', 'true')
+    }
     if (!clean) doc.classList.add('modified')
 
     // Next create the name span containing the display title
@@ -358,6 +369,8 @@ module.exports = class EditorTabs {
     // Also enable closing of the document
     let closeIcon = document.createElement('clr-icon')
     closeIcon.classList.add('close')
+    closeIcon.setAttribute('role', 'button')
+    closeIcon.setAttribute('aria-label', 'Close file')
     closeIcon.setAttribute('shape', 'window-close')
 
     doc.appendChild(nameSpan)

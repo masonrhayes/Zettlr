@@ -2,6 +2,7 @@
 // it's not in the plugins folder.
 
 const tippy = require('tippy.js').default
+const { getFnRefRE } = require('../../../../common/regular-expressions')
 const md2html = require('../../../../common/util/md-to-html')
 
 module.exports = (cm) => {
@@ -12,17 +13,21 @@ module.exports = (cm) => {
 
     if (process.platform === 'darwin' && !event.metaKey) return true
     if (process.platform !== 'darwin' && !event.ctrlKey) return true
-    if (cm.isReadOnly()) return true
-    if (cm.getModeAt(cursor).name !== 'markdown') return true
-
-    event.preventDefault()
+    if (cm.isReadOnly() || cm.getModeAt(cursor).name !== 'markdown') return true
 
     let tokenInfo = cm.getTokenAt(cursor)
+
+    if (tokenInfo.type === null) {
+      return
+    }
+
     let tokenList = tokenInfo.type.split(' ')
     let startsWithCirc = tokenInfo.string.indexOf('^') === 0
 
     // A link (reference) that starts with a cironflex is a footnote
     if (tokenList.includes('link') && startsWithCirc) {
+      event.preventDefault()
+      event.codemirrorIgnore = true
       editFootnote(cm, event.target)
     }
   })
@@ -56,7 +61,7 @@ function showFootnoteTooltip (cm, element) {
 
   // Now find the respective line and extract the footnote content using
   // our RegEx from the footnotes plugin.
-  let fnrefRE = /^\[\^([\da-zA-Z_-]+)\]: (.+)/gm
+  let fnrefRE = getFnRefRE(true) // Get the multiline version
 
   for (let lineNo = cm.doc.lastLine(); lineNo > -1; lineNo--) {
     fnrefRE.lastIndex = 0

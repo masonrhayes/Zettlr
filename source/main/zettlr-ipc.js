@@ -16,7 +16,7 @@
  * END HEADER
  */
 
-const { trans, getTranslationMetadata } = require('../common/lang/i18n.js')
+const { trans, getTranslationMetadata } = require('../common/i18n.js')
 const ipc = require('electron').ipcMain
 const { BrowserWindow } = require('electron') // Needed for close and maximise commands
 
@@ -62,17 +62,6 @@ class ZettlrIPC {
           event.sender.send('message', arg)
         })
         return // Also, don't dispatch further
-      }
-
-      // Last possibility: A quicklook window has requested a file. In this case
-      // we mustn't obliterate the "event" because this way we don't need to
-      // search for the window.
-      if (arg.command === 'ql-get-file') {
-        let QLFile = this._app.findFile(arg.content)
-        global.application.getFile(QLFile).then(file => {
-          event.sender.send('file', file)
-        })
-        return
       }
 
       // In all other occasions omit the event.
@@ -225,7 +214,7 @@ class ZettlrIPC {
 
       // Change theme in config
       case 'toggle-theme':
-        global.config.set('darkTheme', !global.config.get('darkTheme'))
+        global.config.set('darkMode', !global.config.get('darkMode'))
         break
 
       // Change file meta setting in config
@@ -242,35 +231,14 @@ class ZettlrIPC {
         this.send('pdf-preferences', global.config.get())
         break
 
-      case 'get-tags-preferences':
-        this.send('tags-preferences', global.tags.getSpecialTags())
-        break
-
       // Got a new config object
       case 'update-config':
         global.config.bulkSet(cnt)
         break
 
-      case 'update-tags':
-        global.tags.update(cnt)
-        // fall through
-      case 'get-tags':
-        this.send('set-tags', global.tags.getSpecialTags())
-        break
-
-      // Send the global tag database to the renderer process.
-      case 'get-tags-database':
-        this.send('tags-database', global.tags.getTagDatabase())
-        break
-
       // Handle dropped files/folders
       case 'handle-drop':
         this._app.handleAddRoots(cnt)
-        break
-
-      // Statistics
-      case 'request-stats-data':
-        this.send('stats-data', this._app.getStats().getStats())
         break
 
       // Return a list of all available IDs in the currently loaded database
@@ -320,19 +288,6 @@ class ZettlrIPC {
       // Return the metadata for the translation files
       case 'get-translation-metadata':
         return getTranslationMetadata()
-
-      // Send the global tag database to the renderer process.
-      case 'get-tags-database':
-        return global.tags.getTagDatabase()
-
-      // Returns the custom CSS's file contents
-      case 'get-custom-css':
-        return global.css.get()
-
-      // Updates the file contents
-      case 'set-custom-css':
-        console.log('setting custom css', arg)
-        return global.css.set(arg)
 
       default:
         global.log.error(trans('system.unknown_command', cmd))

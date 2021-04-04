@@ -51,10 +51,15 @@ export default function showPopupMenu (position: Point|Rect, items: AnyMenuItem[
             width: rect.width,
             height: rect.height
           }
-          closeSubmenu = showPopupMenu(target, (item as SubmenuItem).submenu, (clickedID: string) => {
+
+          const subCB = (clickedID: string): void => {
             // Call the regular callback to basically "bubble up" the event
             callback(clickedID)
-          })
+            // Furthermore, we need to close the parent menu
+            appMenu.parentElement?.removeChild(appMenu)
+          }
+
+          closeSubmenu = showPopupMenu(target, (item as SubmenuItem).submenu, subCB)
         } else if (
           pointInRect(point, menuRect) &&
           !pointInRect(point, rect) &&
@@ -195,14 +200,21 @@ function renderMenuItem (item: AnyMenuItem, elementClass?: string): HTMLElement 
     // Replace some common keycodes with their correct symbols
     acc = acc.replace('Cmd', '⌘')
     acc = acc.replace('Shift', '⇧')
-    acc = acc.replace('Alt', '⎇')
-    acc = acc.replace('Option', '⎇')
+    if (process.platform === 'darwin') {
+      acc = acc.replace('Alt', '⎇')
+      acc = acc.replace('Option', '⎇')
+    }
+
     acc = acc.replace('Backspace', '←')
     acc = acc.replace('Tab', '↹')
 
-    // Afterwards, remove all plus signs
-    acc = acc.replace(/\+/g, ' ') // Use a thin space (U+2009)
-    acc = acc.replace('Plus', '+') // Obviously, needs to come last
+    // Afterwards, remove all plus signs for macOS. Windows and Linux still
+    // use Plus-signs to display accelerators
+    if (process.platform === 'darwin') {
+      acc = acc.replace(/\+/g, ' ') // Use a thin space (U+2009)
+      acc = acc.replace('Plus', '+') // Obviously, needs to come last
+    }
+
     accel.textContent = acc
     afterElement.appendChild(accel)
   }
